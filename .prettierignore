@@ -1,0 +1,11 @@
+node_modules/
+dist/
+public/runtime/
+tooling/
+personal/
+public/*.network.json
+public/agent-mcp.json
+public/.well-known/
+public/bridge/action-bridge.html
+public/bridge/agent-manifest.json
+package-lock.json

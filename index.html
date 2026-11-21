@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Fixpoint — diagnose appliance faults from real manual data, stage the right part, and book a trusted repair pro. Runs in your browser on your own AI key."
+    />
+    <meta name="theme-color" content="#0f766e" />
+    <title>Fixpoint — Repair, right the first time</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!--
+      Load order matters. These are plain ES modules served verbatim from public/.
+      store.js sets window.__FIXPOINT__ synchronously; site.js exposes the mount
+      object. Both are imported by the runtime's site-actions.js using the SAME
+      URL, so there is exactly one copy of the site state.
+    -->
+    <script type="module" src="/store.js"></script>
+    <script type="module" src="/site.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
