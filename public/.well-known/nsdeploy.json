@@ -1,0 +1,18 @@
+{
+  "protocol": "nsdeploy-link/v1",
+  "exports": [
+    {
+      "network": "fixpoint",
+      "front_man": "fixpoint_desk",
+      "aliases": [
+        "fixpoint",
+        "fixpoint_desk"
+      ],
+      "url": "fixpoint"
+    }
+  ],
+  "imports": [],
+  "link_updates": {
+    "mode": "browser-local"
+  }
+}

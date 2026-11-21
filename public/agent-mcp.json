@@ -1,0 +1,7 @@
+{
+  "protocol": "nsdeploy-agent-mcp/v1",
+  "network": "fixpoint",
+  "front_man": "fixpoint_desk",
+  "available": false,
+  "reason": "Static bundle; a public MCP facade requires an application host."
+}
