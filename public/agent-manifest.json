@@ -1,0 +1,81 @@
+{
+  "brand": "Fixpoint Assistant",
+  "networks": [
+    {
+      "name": "fixpoint",
+      "front_man": "fixpoint_desk",
+      "hocon": "./fixpoint.network.json",
+      "description": "Diagnose appliance faults from real manual data, stage the right part, and book a pro.",
+      "tags": ["agentified-website", "repair", "diagnostics"],
+      "sample_queries": [
+        "My washer won't spin and it hums — what should I check?",
+        "My dishwasher isn't draining, can you walk me through it?",
+        "Add the drive belt to my kit",
+        "Check stock on BELT-42 and book the earliest slot",
+        "Book a repair pro for tomorrow morning",
+        "What is the Open Agentic Web Challenge?",
+        "Do you repair televisions?"
+      ]
+    }
+  ],
+  "llm_router": {
+    "base_url": "https://api.otari.ai/api/v1",
+    "mock": false,
+    "byok_router": "https://api.otari.ai/api/v1"
+  },
+  "allowed_peers": [
+    "https://parts.example",
+    "https://pros.example",
+    "https://worldwideagenticweb.org"
+  ],
+  "peer_policy": {
+    "mode": "closed",
+    "deny_origins": [],
+    "note": "Named parts, repair and challenge-guide peers only, after visitor consent."
+  },
+  "agent_mcp": {
+    "protocol": "nsdeploy-agent-mcp/v1",
+    "network": "fixpoint",
+    "front_man": "fixpoint_desk",
+    "available": false,
+    "reason": "Static bundle; a public MCP facade requires an application host."
+  },
+  "theme": {
+    "primary": "#0f766e"
+  },
+  "linking": {
+    "protocol": "nsdeploy-link/v1",
+    "exports": [
+      {
+        "network": "fixpoint",
+        "front_man": "fixpoint_desk",
+        "aliases": ["fixpoint", "fixpoint_desk"],
+        "url": "fixpoint"
+      }
+    ],
+    "imports": [],
+    "link_updates": {
+      "mode": "browser-local"
+    }
+  },
+  "deployment": {
+    "mode": "static",
+    "self_contained_runtime": true,
+    "browser_mock": false,
+    "direct_byok": true,
+    "direct_mcp_requires_cors": true,
+    "public_mcp_facade": false
+  },
+  "actions": {
+    "version": 1,
+    "module": "./site-actions.js",
+    "bridge": "./bridge/action-bridge.html",
+    "agentTools": [
+      "get_manual_index",
+      "get_symptom_tree",
+      "get_kit",
+      "add_part_to_kit",
+      "book_repair"
+    ]
+  }
+}
