@@ -1,0 +1,30 @@
+# Used by Netlify / Cloudflare Pages. Vercel uses vercel.json instead.
+# Public artifacts must be readable by browsers on other origins.
+
+/agent-manifest.json
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/*.network.json
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/links.json
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/agent-mcp.json
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/.well-known/*
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/bridge/*
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+/data/*
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
