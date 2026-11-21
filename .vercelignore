@@ -1,0 +1,15 @@
+# Private planning docs — must never be uploaded or published
+personal/
+
+# Local build artefacts (Vercel builds from source)
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Git metadata
+.git/
+
+# Local secrets (BYOK keys are entered in the browser, never stored here)
+.env
+.env.*
