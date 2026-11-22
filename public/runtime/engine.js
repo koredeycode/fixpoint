@@ -24,6 +24,24 @@ function normOrigin(url) {
   try { return new URL(url).origin; } catch { return String(url || ""); }
 }
 
+const HISTORY_CHAR_BUDGET = 12000;
+
+// The model only needs to know that widgets were attached, not their JSON. The
+// full presentation stays on the history entry for the UI and for grounding.
+export function historyForModel(history = []) {
+  return history.map((entry) => {
+    if (entry.role !== "assistant" || !entry.presentation) return { role: entry.role, content: entry.content };
+    const ids = (entry.presentation.components || []).map((c) => c.id).filter(Boolean).join(", ");
+    return { role: entry.role, content: `${entry.content || ""}${ids ? `\n[Widgets previously attached: ${ids}]` : ""}` };
+  });
+}
+
+export function boundHistory(history = [], maxChars = HISTORY_CHAR_BUDGET) {
+  const result = history.slice(-24);
+  while (result.length > 2 && JSON.stringify(result).length > maxChars) result.shift();
+  return result;
+}
+
 function sameRouter(left, right) {
   try {
     const normalize = (value) => {
@@ -352,8 +370,8 @@ export class Engine {
       trace: this.trace,
       slyData,
       composition,
-      // Prior conversation turns ([{role,content}]), only for the top front-man.
-      history: history || [],
+      // Prior conversation turns, projected to a compact model-visible form.
+      history: historyForModel(history || []),
       turnControl: turnControl || null,
       defaultModel: fallbackModel(network.config.llm_config?.model_name),
       isTop: !!isTop,
@@ -508,6 +526,7 @@ export class Engine {
 
   async runTurn(userText, { slyData, interaction, _streamToken, _turnControl } = {}) {
     if (!this.top) await this.loadTop();
+    const maxExecutionMs = (Number(this.top?.network?.config?.max_execution_seconds) || 120) * 1000;
     const runSpan = this.trace.start("run", { origin: hostOf(this.top.base), input: userText, streamToken: _streamToken });
     _turnControl?.attach(this.trace, runSpan);
     try {
@@ -529,8 +548,9 @@ export class Engine {
           maxRemoteCalls: 4,
           maxCallsPerPeer: 1,
           agentCalls: 0,
-          maxAgentCalls: 24,
-          deadline: Date.now() + 90_000,
+          maxAgentCalls: Number(this.top?.network?.config?.max_agent_calls) || 8,
+          maxExecutionMs,
+          deadline: Date.now() + maxExecutionMs,
         },
       });
       const message = interactionMessage(userText, interaction);
@@ -543,8 +563,8 @@ export class Engine {
       for (const input of _turnControl?.accepted || []) {
         this.history.push({ role: "user", content: input.text });
       }
-      this.history.push({ role: "assistant", content: result.text + (result.presentation ? `\n\nCRUSE presentation turn: ${runSpan}\n\`\`\`cruse-ui\n${JSON.stringify(result.presentation)}\n\`\`\`` : "") });
-      if (this.history.length > 24) this.history = this.history.slice(-24); // bound tokens
+      this.history.push({ role: "assistant", content: result.text, presentation: result.presentation || null, turnId: runSpan });
+      this.history = boundHistory(this.history);
       this.trace.end(runSpan, { answerPreview: result.text.slice(0, 300) });
       return result;
     } catch (err) {

@@ -41,6 +41,8 @@ function onTraceEvent(event) {
     durationMs: detail.durationMs,
     origin: detail.origin || detail.peerOrigin,
     tool: detail.tool || detail.name || detail.action,
+    resultPreview: detail.resultPreview ? shorten(detail.resultPreview) : undefined,
+    resultBytes: detail.result ? String(detail.result).length : undefined,
     note: shorten(detail.note),
     error: detail.error ? shorten(String(detail.error)) : undefined,
     at: detail.wall || Date.now(),

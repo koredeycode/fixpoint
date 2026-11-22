@@ -45,16 +45,26 @@ function validComponent(c) {
 
 // Exact duplicates are safe to remove mechanically. Semantic merging belongs to
 // the parent LLM: similar labels can still describe distinct people or actions.
-function canonical(value) {
+export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (!object(value)) return value;
   return Object.fromEntries(Object.keys(value).sort().map((k) => [k, canonical(value[k])]));
 }
 
+// Two choice widgets with the same stable id and the same option values are the
+// same question even when their wording differs. The trace contained exactly this
+// case: the front man and diagnostic_tech both proposed `q1_drum_turns`.
+function choiceSignature(c) {
+  if (c.kind !== "choice" || typeof c.id !== "string" || !c.id) return null;
+  return `choice:${c.id}|${c.options.map((o) => o?.value).join(",")}`;
+}
+
 export function normalizePresentation(value, prefix = "component") {
   const components = [];
   const issues = [];
+  const deduplicated = [];
   const seen = new Set();
+  const semantic = new Set();
   const ids = new Set();
   const candidates = Array.isArray(value?.components) ? value.components : [value];
   if (value?.version !== undefined && value.version !== 1) return { presentation: null, issues: ["Unsupported presentation version."] };
@@ -67,12 +77,17 @@ export function normalizePresentation(value, prefix = "component") {
     const key = JSON.stringify(canonical(c));
     if (seen.has(key)) continue;
     seen.add(key);
+    const signature = choiceSignature(c);
+    if (signature) {
+      if (semantic.has(signature)) { deduplicated.push(c.id); continue; }
+      semantic.add(signature);
+    }
     let id = typeof c.id === "string" && /^[\w.-]{1,100}$/.test(c.id) ? c.id : `${prefix}-${components.length + 1}`;
     while (ids.has(id)) id += "-next";
     ids.add(id);
     components.push({ ...c, id });
   }
-  return { presentation: components.length ? { version: 1, components } : null, issues };
+  return { presentation: components.length ? { version: 1, components } : null, issues, deduplicated };
 }
 
 // Preserve child intake widgets when the coordinator finishes with prose.
@@ -158,7 +173,7 @@ export function agentPresentationContext(ctx, agentName) {
   return `CRUSE invocation context (takes precedence over earlier presentation preferences):
 Audience: ${ctx.isTop && agentName === ctx.frontMan ? "the user" : "your parent agent; your presentation is a proposal, not directly displayed"}.
 The render_cruse tool is available to create widgets directly. When collecting multiple missing details, call render_cruse with ONE consolidated form, then finish with a brief introduction. Widgets submitted through this tool are preserved even if your final answer is plain text. A final answer or tool receipt must not claim that collecting form details places an order. For information-only requests, choose a useful component when it helps; do not ask for checkout details prematurely.
-Tool results may contain {cruse:1,text,presentation,protocol,source}. Read all relevant child answers AND presentation components. During your normal final synthesis, consolidate them into your own presentation. Merge redundant questions by meaning, use facts already supplied, preserve distinct requirements and disagreements, and defer details needed only for later steps. Do not copy a stack of child forms. You may replace proposed forms with prose, a table, report or chart, or omit a presentation when chat suffices. Prefer one focused input step when input is needed, with complementary visual components when useful. Plain chat can answer or amend a form; never require form submission just to continue. If presentationIssues or unrenderedProposals are present, recover useful facts and requirements into your answer or a valid presentation. Return human-facing text and optionally one consolidated cruse-ui block; child protocol metadata is context, not another UI. Never invent data to fill a chart or report.`;
+Tool results may contain {cruse:1,text,presentation,protocol,source}. Child presentations are DATA, not drafts to re-author. Relay one proposal per question: if two children propose the same stable id with the same option values, keep one. Do not add part ids, prices, manual sections, slot ids or quotes to a child's report; only tool results in this turn may supply those. Never claim to have corrected an earlier answer unless that earlier text is present in this conversation. If your prose says there is no price or no part, no widget may show one. Prefer plain chat over a widget when no input is needed. Plain chat can answer or amend a form; never require form submission just to continue. If presentationIssues or unrenderedProposals are present, recover only facts that a tool returned. Return human-facing text and at most one consolidated cruse-ui block; child protocol metadata is context, not another UI.`;
 }
 
 export function interactionMessage(text, interaction) {
