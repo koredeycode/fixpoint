@@ -38,6 +38,12 @@ export interface FixpointMount {
   start(): Promise<unknown>;
 }
 
+export interface ActiveConfig {
+  router: string;
+  key: string;
+  model: string;
+}
+
 export interface ObsEvent {
   seq?: number;
   phase?: string;
@@ -77,6 +83,7 @@ declare global {
     __FIXPOINT__?: FixpointBridge;
     __FIXPOINT_MOUNT__?: FixpointMount;
     __FIXPOINT_OBS__?: ObsBridge;
+    __FIXPOINT_ACTIVE_CONFIG__?: () => ActiveConfig;
   }
 }
 

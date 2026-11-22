@@ -53,12 +53,12 @@ export default function ObservabilityPanel() {
 
   if (!enabled) return null;
 
-  function download() {
-    const payload = JSON.stringify(window.__FIXPOINT_OBS__?.export() ?? {}, null, 2);
-    const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+  function download(filename: string, payload: unknown) {
+    const json = JSON.stringify(payload ?? {}, null, 2);
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "fixpoint-observability.json";
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -136,12 +136,20 @@ export default function ObservabilityPanel() {
             )}
           </ol>
 
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={download}
+              onClick={() =>
+                download("fixpoint-observability.json", window.__FIXPOINT_OBS__?.export())
+              }
               className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
             >
               <Download size={13} aria-hidden="true" /> Download JSON
+            </button>
+            <button
+              onClick={() => download("agent-trace-full.json", window.__FIXPOINT_OBS__?.rawTrace())}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+            >
+              <Download size={13} aria-hidden="true" /> Download full trace (includes chat text)
             </button>
             <button
               onClick={() => window.__FIXPOINT_OBS__?.clear()}
@@ -150,6 +158,10 @@ export default function ObservabilityPanel() {
               <Trash2 size={13} aria-hidden="true" /> Clear
             </button>
           </div>
+          <p className="mt-2 text-[10px] leading-snug text-red-600">
+            Warning: the full trace file contains user messages and chat text. Do not share it
+            publicly.
+          </p>
         </div>
       ) : null}
     </aside>

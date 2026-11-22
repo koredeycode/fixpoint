@@ -5,6 +5,160 @@
 import { App } from "./store.js";
 import { installObservability } from "./observability.js";
 
+/**
+ * Populate a searchable model picker from the chosen router as soon as a key is
+ * pasted. The runtime itself only fetches /models during Save-and-start
+ * validation, so this closes that gap. The key goes only to that router.
+ */
+function wireModelPicker() {
+  const keyEl = document.querySelector("#ns-key");
+  const modelEl = document.querySelector("#ns-model");
+  const routerEl = document.querySelector("#ns-router");
+  if (!keyEl || !modelEl || !routerEl) return;
+  const label = modelEl.closest("label");
+  if (!label || label.querySelector(".ns-model-picker")) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "ns-model-picker";
+  // One field only: the runtime's real Model input. Our menu hangs off it.
+  modelEl.removeAttribute("list"); // avoid the native datalist dropdown as well
+  const status = document.createElement("p");
+  status.className = "ns-model-status";
+  status.textContent = "Enter a model ID, or click the field to choose.";
+  const menu = document.createElement("div");
+  menu.className = "ns-model-picker-menu";
+  menu.hidden = true;
+  const search = document.createElement("input");
+  search.type = "search";
+  search.className = "ns-model-picker-search";
+  search.placeholder = "Search models";
+  const list = document.createElement("div");
+  list.className = "ns-model-picker-list";
+  menu.append(search, list);
+  wrap.append(status, menu);
+  label.append(wrap);
+
+  let models = [];
+  let timer = null;
+  let controller = null;
+
+  const draw = (query = "") => {
+    list.replaceChildren();
+    const term = query.trim().toLowerCase();
+    const shown = models.filter((id) => !term || id.toLowerCase().includes(term)).slice(0, 80);
+    if (!shown.length) {
+      const empty = document.createElement("p");
+      empty.className = "ns-model-picker-empty";
+      empty.textContent = models.length ? "No matches" : "No models loaded yet";
+      list.append(empty);
+      return;
+    }
+    for (const id of shown) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "ns-model-picker-item";
+      item.textContent = id;
+      item.addEventListener("click", () => {
+        modelEl.value = id;
+        modelEl.dispatchEvent(new Event("input", { bubbles: true }));
+        modelEl.dispatchEvent(new Event("change", { bubbles: true }));
+        status.textContent = `Selected ${id}`;
+        menu.hidden = true;
+      });
+      list.append(item);
+    }
+  };
+
+  const load = async () => {
+    const key = keyEl.value.trim();
+    const router = routerEl.value.trim();
+    if (!key || !router || /mock/i.test(router)) {
+      models = [];
+      status.textContent = "Enter a model ID, or click the field to choose.";
+      return;
+    }
+    if (controller) controller.abort();
+    controller = new AbortController();
+    status.textContent = "Loading models…";
+    try {
+      const response = await fetch(`${router.replace(/\/$/, "")}/models`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${key}` },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      const entries = Array.isArray(body?.data) ? body.data : [];
+      models = entries
+        .filter((item) => !item.type || item.type === "chat")
+        .filter((item) => !item.supported_parameters || item.supported_parameters.includes("tools"))
+        .map((item) => item.id)
+        .filter(Boolean);
+      // Keep the runtime's native datalist in sync so its validation agrees.
+      const datalist = document.querySelector("#ns-model-options");
+      if (datalist) {
+        datalist.replaceChildren();
+        for (const id of models) {
+          const option = document.createElement("option");
+          option.value = id;
+          datalist.append(option);
+        }
+      }
+      status.textContent = models.length
+        ? `${models.length} tool-capable models — click the Model field to choose`
+        : "No tool-capable models — type an ID";
+      draw();
+    } catch {
+      models = [];
+      status.textContent = "Could not load models — type an ID";
+    }
+  };
+
+  const schedule = () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(load, 400);
+  };
+  keyEl.addEventListener("input", schedule);
+  routerEl.addEventListener("input", schedule);
+  const openMenu = () => {
+    if (menu.hidden) {
+      menu.hidden = false;
+      search.value = "";
+      draw();
+      search.focus();
+    }
+  };
+  modelEl.addEventListener("click", openMenu);
+  modelEl.addEventListener("focus", openMenu);
+  search.addEventListener("input", () => draw(search.value));
+}
+
+/** The runtime rebuilds the agent list on every trace event; tag peers by label. */
+function decorateAgentCards() {
+  const list = document.querySelector("#ns-anodes");
+  if (!list) return;
+  const apply = () => {
+    for (const node of list.querySelectorAll(".ns-anode")) {
+      const label = node.querySelector(".ns-aname")?.textContent || "";
+      let kind = "peer";
+      if (/SpareParts/i.test(label)) kind = "parts";
+      else if (/Repair Pros/i.test(label)) kind = "pro";
+      else if (/Open Agentic Web/i.test(label)) kind = "guide";
+      else if (/your concierge/i.test(node.textContent || "")) kind = "local";
+      node.dataset.peerKind = kind;
+      const address = node.querySelector(".ns-aaddr");
+      if (address) {
+        const text = address.textContent || "";
+        address.title = text;
+        // The runtime injects <wbr> into addresses; those defeat ellipsis.
+        if (address.querySelector("wbr")) address.textContent = text;
+      }
+    }
+  };
+  apply();
+  new MutationObserver(apply).observe(list, { childList: true, subtree: true });
+}
+
 const PROVIDER_KEY_URLS = {
   Otari: "https://otari.ai/dashboard#/keys",
   "Google AI Studio": "https://aistudio.google.com/apikey",
@@ -229,6 +383,14 @@ export class AssistantMount {
         booted.engine.onConsent = AssistantMount.consent;
 
         installObservability(booted.engine);
+        // Active BYOK setup for the post-turn suggestion call. The key is only
+        // ever read here and sent to this same router — never stored or logged.
+        window.__FIXPOINT_ACTIVE_CONFIG__ = () => ({
+          router:
+            booted.engine.top?.llm?.baseUrl || document.querySelector("#ns-router")?.value || "",
+          key: booted.engine.byokKey || document.querySelector("#ns-key")?.value || "",
+          model: booted.engine.modelOverride || document.querySelector("#ns-model")?.value || "",
+        });
         window.__FIXPOINT_OBS__?.note("assistant_boot", {
           origin: siteBase,
           needsKey: !booted.engine.byokKey || booted.engine.byokKey === "demo",
@@ -242,6 +404,8 @@ export class AssistantMount {
             : "Assistant connected to this page.";
         }
         reorderSettings();
+        wireModelPicker();
+        decorateAgentCards();
         AssistantMount.greet(needsKey);
         return booted.engine;
       } catch (error) {

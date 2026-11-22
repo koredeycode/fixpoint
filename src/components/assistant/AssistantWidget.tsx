@@ -11,13 +11,10 @@ import {
   X,
 } from "lucide-react";
 
-const SAMPLES = [
-  "My washer won't spin and it hums",
-  "My dishwasher isn't draining",
-  "My fridge isn't cooling",
-  "Add the drive belt to my kit",
-  "Book the earliest repair slot",
-];
+interface Suggestion {
+  text: string;
+  action?: "settings";
+}
 
 const OPEN_EVENT = "fixpoint:open-chat";
 
@@ -26,11 +23,33 @@ const OPEN_EVENT = "fixpoint:open-chat";
  * whole widget stays mounted and is only shown/hidden with CSS — never unmounted.
  */
 export default function AssistantWidget() {
-  const [open, setOpen] = useState(false);
+  // The runtime deliberately reloads the page after "Save and start" applies a
+  // key, so keep the widget open across that reload.
+  const [open, setOpen] = useState(() => {
+    try {
+      return window.sessionStorage.getItem("fixpoint-widget-open") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem("fixpoint-widget-open", open ? "1" : "0");
+    } catch {
+      /* private browsing with storage disabled */
+    }
+  }, [open]);
   const [showAgents, setShowAgents] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [suggestion, setSuggestion] = useState(0);
+  const [generated, setGenerated] = useState<Suggestion[]>([]);
+  const [generating, setGenerating] = useState(false);
   const pendingQuery = useRef<string | null>(null);
+  const suggestController = useRef<AbortController | null>(null);
+
+  // Only model-generated follow-ups are shown. No static fallback.
+  const suggestions = generated;
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -38,24 +57,27 @@ export default function AssistantWidget() {
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, []);
 
-  // Rotate one suggestion at a time, just above the composer.
+  // Rotate one context-aware suggestion at a time, just above the composer.
   useEffect(() => {
+    setSuggestion(0);
+    if (!suggestions.length) return;
     const timer = window.setInterval(() => {
-      setSuggestion((index) => (index + 1) % SAMPLES.length);
+      setSuggestion((index) => (index + 1) % suggestions.length);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [suggestions]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (settingsOpen) setSettingsOpen(false);
+      else if (showAgents) setShowAgents(false);
       else setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, settingsOpen]);
+  }, [open, settingsOpen, showAgents]);
 
   // Mirror the runtime-managed status text into a data attribute for styling.
   useEffect(() => {
@@ -74,6 +96,111 @@ export default function AssistantWidget() {
     const observer = new MutationObserver(sync);
     observer.observe(status, { childList: true, characterData: true, subtree: true });
     return () => observer.disconnect();
+  }, []);
+
+  // Claude-style follow-ups: one small model call after each completed turn.
+  // Uses the visitor's active router/key, with the deterministic chips as fallback.
+  useEffect(() => {
+    const generate = async () => {
+      const config = window.__FIXPOINT_ACTIVE_CONFIG__?.();
+      if (!config?.key || !config.router || /mock/i.test(config.router)) return;
+      if (suggestController.current) suggestController.current.abort();
+      const controller = new AbortController();
+      suggestController.current = controller;
+      setGenerating(true);
+      try {
+        const history = [...document.querySelectorAll("#ns-msgs .ns-msg")]
+          .slice(-8)
+          .map((element) => ({
+            role: element.classList.contains("user") ? "user" : "assistant",
+            content: (element.textContent || "").slice(0, 400),
+          }));
+        if (!history.length) return;
+        const response = await fetch(`${config.router.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.key}`,
+          },
+          body: JSON.stringify({
+            model: config.model || undefined,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Suggest the next questions a visitor could ask an appliance-repair assistant. Reply ONLY with a JSON array of 3 short questions, each under 12 words, about diagnosis, parts, booking or the Open Agentic Web. Never write code.",
+              },
+              ...history,
+              { role: "user", content: "Suggest 3 short follow-up questions now." },
+            ],
+            // Reasoning models spend tokens in reasoning_content before content;
+            // 200 left them truncated with an empty answer.
+            max_tokens: 1000,
+            temperature: 0.4,
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        const message = body?.choices?.[0]?.message || {};
+        const reasoning =
+          message.reasoning_content || message.provider_specific_fields?.reasoning_content || "";
+        // Prefer the real answer, but reasoning models sometimes put everything
+        // there and leave content empty — recover the questions from either.
+        const source = String(message.content || reasoning || "");
+        const clean = source.replace(/```(?:json)?/gi, "").trim();
+        let parsed: unknown = null;
+        const start = clean.indexOf("[");
+        const end = clean.lastIndexOf("]");
+        if (start >= 0 && end > start) {
+          try {
+            parsed = JSON.parse(clean.slice(start, end + 1));
+          } catch {
+            parsed = null;
+          }
+        }
+        let items = Array.isArray(parsed)
+          ? parsed
+              .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              .slice(0, 3)
+              .map((item) => ({ text: item.trim().slice(0, 120) }))
+          : [];
+        if (!items.length) {
+          items = clean
+            .split("\n")
+            .map((line) =>
+              line
+                .replace(/^\s*\d+[.)]\s*/, "")
+                .replace(/^["']|["']$/g, "")
+                .trim(),
+            )
+            .filter((line) => line.includes("?") && line.length < 160)
+            .slice(0, 3)
+            .map((line) => ({ text: line }));
+        }
+        if (items.length) setGenerated(items);
+      } catch {
+        setGenerated([]);
+      } finally {
+        if (!controller.signal.aborted) setGenerating(false);
+      }
+    };
+
+    const onTrace = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind?: string; phase?: string; status?: string }>)
+        .detail;
+      if (!detail || detail.kind !== "run") return;
+      if (detail.phase === "start") {
+        setGenerated([]);
+        return;
+      }
+      if (detail.phase === "end" && detail.status === "ok") void generate();
+    };
+    window.addEventListener("fixpoint:obs", onTrace);
+    return () => {
+      window.removeEventListener("fixpoint:obs", onTrace);
+      suggestController.current?.abort();
+    };
   }, []);
 
   // Drive the runtime's settings <details> from our bottom-sheet state, and
@@ -210,7 +337,7 @@ export default function AssistantWidget() {
       <section
         role="dialog"
         aria-label="Ask Fixpoint assistant"
-        className={`fixed bottom-2 left-2 right-2 z-40 flex h-[92vh] flex-col overflow-hidden rounded-3xl border border-ink-200 bg-white shadow-2xl sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(38rem,calc(100vh-2rem))] sm:w-[min(26rem,calc(100vw-2rem))] ${open ? "" : "hidden"}`}
+        className={`fixed bottom-2 left-2 right-2 z-40 flex h-[92vh] flex-col overflow-hidden rounded-3xl border border-ink-200 bg-white shadow-2xl sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(38rem,calc(100vh-2rem))] sm:w-[min(26rem,calc(100vw-2rem))] xl:h-[min(40rem,calc(100vh-4rem))] xl:w-[min(56rem,calc(100vw-4rem))] ${open ? "" : "hidden"}`}
       >
         <header className="flex items-center justify-between bg-linear-to-br from-brand-600 to-brand-700 px-5 py-4 text-white">
           <div className="flex items-center gap-3">
@@ -261,23 +388,44 @@ export default function AssistantWidget() {
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-visible p-2 sm:p-3">
-          {/* One rotating suggestion, sitting just above the runtime composer. */}
-          <div className="pointer-events-none absolute inset-x-3 bottom-[58px] z-10 flex justify-center">
-            <button
-              onClick={() => ask(SAMPLES[suggestion])}
-              className="pointer-events-auto flex max-w-full items-center gap-1.5 truncate rounded-full border border-brand-100 bg-white/95 px-2.5 py-1 text-[11px] text-brand-700 shadow-sm transition-colors hover:border-brand-600"
-            >
-              <Sparkles size={11} aria-hidden="true" />
-              <span className="truncate">{SAMPLES[suggestion]}</span>
-              <ChevronRight size={11} aria-hidden="true" />
-            </button>
-          </div>
+          {/* One rotating suggestion, sitting just above the runtime composer.
+              Hidden while a drawer or sheet is open so it never floats on top. */}
+          {!showAgents && !settingsOpen ? (
+            <div className="pointer-events-none absolute inset-x-3 bottom-[58px] z-10 flex justify-center">
+              {suggestions.length ? (
+                <button
+                  disabled={generating}
+                  onClick={() => {
+                    const current = suggestions[suggestion % suggestions.length];
+                    if (current.action === "settings") setSettingsOpen(true);
+                    else ask(current.text);
+                  }}
+                  title="Suggested by your AI provider"
+                  className="pointer-events-auto flex max-w-full items-center gap-1.5 truncate rounded-full border border-brand-100 bg-white/95 px-2.5 py-1 text-[11px] text-brand-700 shadow-sm transition-colors hover:border-brand-600 disabled:opacity-60"
+                >
+                  <Sparkles size={11} aria-hidden="true" />
+                  <span className="truncate">
+                    {generating && !generated.length
+                      ? "Thinking of next questions…"
+                      : suggestions[suggestion % suggestions.length].text}
+                  </span>
+                  <ChevronRight size={11} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           {settingsOpen ? (
             <button
               aria-label="Close settings"
               onClick={() => setSettingsOpen(false)}
               className="absolute inset-0 z-20 cursor-default bg-ink-900/25"
+            />
+          ) : showAgents ? (
+            <button
+              aria-label="Close agent activity"
+              onClick={() => setShowAgents(false)}
+              className="absolute inset-0 z-[25] cursor-default bg-ink-900/20 xl:hidden"
             />
           ) : null}
 
