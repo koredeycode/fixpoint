@@ -51,6 +51,7 @@ export const App = {
       return {
         ok: true,
         sourceUrl: sourceLink("manual_library"),
+        slots: snapshot(state.slots),
         appliances: state.appliances.map((a) => ({
           id: a.id,
           name: a.name,
