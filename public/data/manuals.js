@@ -4,6 +4,9 @@
 // Snapshot date for this dataset: 2026-11-21 (see fixpoint.hocon metadata.source).
 
 export const MANUALS_DATA = {
+  // Base for site-side deep links. store.js builds stable hashes such as
+  // #washer_wx200--wont_spin, so citations survive edits to this file.
+  sourceUrl: "https://askfixpoint.vercel.app/",
   appliances: [
     {
       id: "washer_wx200",

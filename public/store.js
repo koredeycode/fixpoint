@@ -5,6 +5,14 @@
 
 import { MANUALS_DATA } from "./data/manuals.js";
 
+// Stable deep links: #<appliance>--<symptom>, independent of dataset line numbers.
+const SITE_BASE =
+  typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : MANUALS_DATA.sourceUrl || "https://askfixpoint.vercel.app/";
+const sourceLink = (applianceId, symptomId) =>
+  `${SITE_BASE.replace(/\/$/, "")}/#${applianceId}${symptomId ? `--${symptomId}` : ""}`;
+
 const state = {
   appliances: MANUALS_DATA.appliances,
   parts: MANUALS_DATA.parts,
@@ -42,11 +50,17 @@ export const App = {
     getManualIndex() {
       return {
         ok: true,
+        sourceUrl: sourceLink("manual_library"),
         appliances: state.appliances.map((a) => ({
           id: a.id,
           name: a.name,
           manual: a.manual,
-          symptoms: a.symptoms.map((s) => ({ id: s.id, name: s.name })),
+          sourceUrl: sourceLink(a.id),
+          symptoms: a.symptoms.map((s) => ({
+            id: s.id,
+            name: s.name,
+            sourceUrl: sourceLink(a.id, s.id),
+          })),
         })),
       };
     },
@@ -83,6 +97,7 @@ export const App = {
         ok: true,
         appliance: appliance.name,
         manual: appliance.manual,
+        sourceUrl: sourceLink(appliance.id, symptom.id),
         symptom: symptom.name,
         steps: snapshot(symptom.steps),
         resolution: snapshot(symptom.resolution),
