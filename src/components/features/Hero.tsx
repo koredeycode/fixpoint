@@ -1,3 +1,4 @@
+import { ArrowRight, Check, CheckCircle2 } from "lucide-react";
 import Button from "../ui/Button";
 import Eyebrow from "../ui/Eyebrow";
 import type { PageId } from "../../types/navigation";
@@ -23,14 +24,14 @@ export default function Hero({ onNavigate }: { onNavigate: (page: PageId) => voi
         </p>
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" onClick={() => onNavigate("assistant")}>
-            Ask Fixpoint
+            Ask Fixpoint <ArrowRight size={16} aria-hidden="true" />
           </Button>
           <Button onClick={() => onNavigate("manuals")}>Browse manuals</Button>
         </div>
         <ul className="mt-8 space-y-2 text-ink-600">
           {POINTS.map((point) => (
-            <li key={point}>
-              <span className="mr-2 font-extrabold text-brand-600">✓</span>
+            <li key={point} className="flex items-start gap-2">
+              <Check className="mt-1 shrink-0 text-brand-600" size={16} aria-hidden="true" />
               {point}
             </li>
           ))}
@@ -53,8 +54,8 @@ export default function Hero({ onNavigate }: { onNavigate: (page: PageId) => voi
             Yes, it spins easily
           </span>
         </div>
-        <p className="mt-5 border-t border-dashed border-ink-200 pt-4 font-bold text-brand-700">
-          ✓ Worn drive belt · BELT-42 staged
+        <p className="mt-5 flex items-center gap-2 border-t border-dashed border-ink-200 pt-4 font-bold text-brand-700">
+          <CheckCircle2 size={18} aria-hidden="true" /> Worn drive belt · BELT-42 staged
         </p>
       </div>
     </section>

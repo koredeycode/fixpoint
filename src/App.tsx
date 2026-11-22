@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import Hero from "./components/features/Hero";
@@ -6,7 +6,7 @@ import ManualLibrary from "./components/features/ManualLibrary";
 import SymptomGuide from "./components/features/SymptomGuide";
 import RepairKit from "./components/features/RepairKit";
 import BookingPage from "./components/features/BookingPage";
-import AssistantIsland from "./components/assistant/AssistantIsland";
+import AssistantWidget from "./components/assistant/AssistantWidget";
 import ObservabilityPanel from "./components/dev/ObservabilityPanel";
 import { useSiteState } from "./lib/siteBridge";
 import type { PageId } from "./types/navigation";
@@ -17,19 +17,17 @@ import type { PageId } from "./types/navigation";
  */
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
-  const assistantRef = useRef<HTMLDivElement>(null);
   const state = useSiteState();
   const kitCount = state.kit.items.reduce((n, item) => n + item.quantity, 0);
 
   function navigate(next: PageId) {
-    setPage(next);
     if (next === "assistant") {
-      requestAnimationFrame(() =>
-        assistantRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // The assistant is a floating widget, not a page. Any CTA can open it.
+      window.dispatchEvent(new Event("fixpoint:open-chat"));
+      return;
     }
+    setPage(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -49,13 +47,10 @@ export default function App() {
         {page === "symptoms" ? <SymptomGuide onNavigate={navigate} /> : null}
         {page === "kit" ? <RepairKit onNavigate={navigate} /> : null}
         {page === "book" ? <BookingPage /> : null}
-
-        <div ref={assistantRef} className="scroll-mt-24">
-          <AssistantIsland />
-        </div>
       </main>
 
       <Footer />
+      <AssistantWidget />
       <ObservabilityPanel />
     </div>
   );

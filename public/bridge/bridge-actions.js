@@ -1,7 +1,14 @@
 // The reads Fixpoint shares with other agent sites.
 // Peers run our network in their visitor's browser and get ONLY these actions.
 // Never put personal data, keys, or writes in a peer-shared action.
-export const bridgeActions = [
+//
+// The runtime's action bridge loads this module and requires a `registerActions`
+// export; it calls it with the registry facade. Keep the definitions here and
+// wrap the site's own functions from store.js.
+
+import { App } from "../store.js";
+
+const BRIDGE_ACTIONS = [
   {
     name: "get_manual_index",
     description: "List the appliances and symptom topics Fixpoint can diagnose.",
@@ -26,7 +33,8 @@ export const bridgeActions = [
   },
 ];
 
-// The bridge page imports this module and expects App in scope; expose it the
-// same way the build's action-bridge template does.
-import { App } from "../store.js";
+export function registerActions(actions) {
+  for (const definition of BRIDGE_ACTIONS) actions.register(definition);
+}
+
 export { App };

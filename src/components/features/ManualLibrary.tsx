@@ -1,3 +1,4 @@
+import { ArrowRight, BookOpen } from "lucide-react";
 import { callPage, useSiteState } from "../../lib/siteBridge";
 import type { PageId } from "../../types/navigation";
 import Button from "../ui/Button";
@@ -21,7 +22,10 @@ export default function ManualLibrary({ onNavigate }: Props) {
       <div className="grid gap-4 md:grid-cols-2">
         {appliances.map((appliance) => (
           <Card key={appliance.id}>
-            <h2 className="text-xl font-bold">{appliance.name}</h2>
+            <div className="flex items-center gap-2">
+              <BookOpen className="text-brand-600" size={18} aria-hidden="true" />
+              <h2 className="text-xl font-bold">{appliance.name}</h2>
+            </div>
             <p className="mt-1 text-sm text-ink-600">{appliance.manual}</p>
             <ul className="mt-4 flex flex-wrap gap-2">
               {appliance.symptoms.map((symptom) => (
@@ -29,12 +33,12 @@ export default function ManualLibrary({ onNavigate }: Props) {
                   <Button
                     className="rounded-full px-3 py-1.5 text-xs"
                     onClick={() => {
-                      // Selection lives in the same store the agent reads.
                       callPage("setSelectedSymptom", appliance.id, symptom.id);
                       onNavigate("symptoms");
                     }}
                   >
-                    {symptom.name} →
+                    {symptom.name}
+                    <ArrowRight size={13} aria-hidden="true" />
                   </Button>
                 </li>
               ))}

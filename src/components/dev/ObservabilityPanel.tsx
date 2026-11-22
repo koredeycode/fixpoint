@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Activity, ChevronDown, ChevronUp, Download, Trash2 } from "lucide-react";
 import type { ObsEvent, ObsSummary } from "../../types/global";
 
 const EMPTY: ObsSummary = {
@@ -27,7 +28,8 @@ const CHIPS: Array<{ key: keyof ObsSummary; label: string }> = [
  * Shown in dev builds or with ?debug in the URL. It lives OUTSIDE #agent-app.
  */
 export default function ObservabilityPanel() {
-  const enabled = import.meta.env.DEV || new URLSearchParams(window.location.search).has("debug");
+  // Explicit opt-in only — never show this in a normal dev or production view.
+  const enabled = new URLSearchParams(window.location.search).has("debug");
   const [events, setEvents] = useState<ObsEvent[]>([]);
   const [summary, setSummary] = useState<ObsSummary>(EMPTY);
   const [open, setOpen] = useState(false);
@@ -62,14 +64,21 @@ export default function ObservabilityPanel() {
   }
 
   return (
-    <aside className="fixed bottom-4 right-4 z-40 w-[min(30rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white/95 shadow-xl backdrop-blur">
+    <aside className="fixed bottom-4 left-4 z-40 w-[min(30rem,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white/95 shadow-xl backdrop-blur">
       <button
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-bold text-brand-700"
       >
-        <span>● Agent trace {summary.errors ? `— ${summary.errors} errors` : ""}</span>
-        <span aria-hidden="true">{open ? "▾" : "▴"}</span>
+        <span className="flex items-center gap-2">
+          <Activity size={15} aria-hidden="true" />
+          Agent trace {summary.errors ? `— ${summary.errors} errors` : ""}
+        </span>
+        {open ? (
+          <ChevronDown size={15} aria-hidden="true" />
+        ) : (
+          <ChevronUp size={15} aria-hidden="true" />
+        )}
       </button>
 
       {open ? (
@@ -130,15 +139,15 @@ export default function ObservabilityPanel() {
           <div className="mt-3 flex gap-2">
             <button
               onClick={download}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
             >
-              Download JSON
+              <Download size={13} aria-hidden="true" /> Download JSON
             </button>
             <button
               onClick={() => window.__FIXPOINT_OBS__?.clear()}
-              className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-600"
+              className="flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-600 hover:border-brand-600"
             >
-              Clear
+              <Trash2 size={13} aria-hidden="true" /> Clear
             </button>
           </div>
         </div>

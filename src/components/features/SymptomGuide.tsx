@@ -1,3 +1,4 @@
+import { ArrowRight, ListChecks, PackagePlus, Unplug } from "lucide-react";
 import { useSiteState } from "../../lib/siteBridge";
 import type { PageId } from "../../types/navigation";
 import Button from "../ui/Button";
@@ -7,14 +8,17 @@ import PageSection from "../ui/PageSection";
 
 const STEPS = [
   {
+    icon: Unplug,
     title: "Unplug the appliance",
     body: "Always disconnect power before inspecting the drum, filter or pump.",
   },
   {
+    icon: ListChecks,
     title: "Answer the manual's question",
     body: "The assistant asks one question at a time with a generated chooser, using the exact options from the service manual.",
   },
   {
+    icon: PackagePlus,
     title: "Stage the part, then book",
     body: "The right part goes into your kit. A pro slot is shown only after the diagnosis is grounded in the manual.",
   },
@@ -35,28 +39,39 @@ export default function SymptomGuide({ onNavigate }: Props) {
       lede="Follow the same decision tree the assistant uses. When a branch needs a part, stage it in your kit."
     >
       <div className="grid gap-3">
-        {STEPS.map((step, index) => (
-          <Card key={step.title} className="flex gap-4">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 font-extrabold text-brand-700">
-              {index + 1}
-            </span>
-            <div>
-              <h2 className="text-lg font-bold">{step.title}</h2>
-              <p className="mt-1 text-ink-600">{step.body}</p>
-              {index === 1 ? (
-                <p className="mt-2 text-sm text-ink-600">
-                  Source:{" "}
-                  <code className="rounded bg-paper px-1">{appliance?.manual ?? "manual"}</code>
-                </p>
-              ) : null}
-              {index === 2 ? (
-                <Button variant="primary" className="mt-4" onClick={() => onNavigate("assistant")}>
-                  Start a guided diagnosis
-                </Button>
-              ) : null}
-            </div>
-          </Card>
-        ))}
+        {STEPS.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <Card key={step.title} className="flex gap-4">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700">
+                <Icon size={20} aria-hidden="true" />
+              </span>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold">
+                  <span className="mr-2 text-ink-600">{index + 1}.</span>
+                  {step.title}
+                </h2>
+                <p className="mt-1 text-ink-600">{step.body}</p>
+                {index === 1 ? (
+                  <p className="mt-2 text-sm text-ink-600">
+                    Source:{" "}
+                    <code className="rounded bg-paper px-1">{appliance?.manual ?? "manual"}</code>
+                  </p>
+                ) : null}
+                {index === 2 ? (
+                  <Button
+                    variant="primary"
+                    className="mt-4"
+                    onClick={() => onNavigate("assistant")}
+                  >
+                    Start a guided diagnosis
+                    <ArrowRight size={15} aria-hidden="true" />
+                  </Button>
+                ) : null}
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       <aside className="mt-6 rounded-r-xl border-l-4 border-accent-500 bg-accent-400/10 px-5 py-4 text-ink-900">

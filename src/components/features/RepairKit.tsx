@@ -1,3 +1,4 @@
+import { CalendarCheck, Package, Trash2 } from "lucide-react";
 import { useSiteState, callPage } from "../../lib/siteBridge";
 import type { PageId } from "../../types/navigation";
 import type { KitItem } from "../../types/global";
@@ -33,7 +34,7 @@ export default function RepairKit({ onNavigate }: Props) {
         <EmptyState
           action={
             <Button variant="primary" onClick={() => onNavigate("assistant")}>
-              Diagnose a fault
+              <Package size={16} aria-hidden="true" /> Diagnose a fault
             </Button>
           }
         >
@@ -56,10 +57,10 @@ export default function RepairKit({ onNavigate }: Props) {
           />
           <div className="mt-6 flex flex-wrap gap-3">
             <Button variant="primary" onClick={() => onNavigate("book")}>
-              Book a pro
+              <CalendarCheck size={16} aria-hidden="true" /> Book a pro
             </Button>
             <Button variant="quiet" onClick={() => callPage("clearKit")}>
-              Clear kit
+              <Trash2 size={15} aria-hidden="true" /> Clear kit
             </Button>
           </div>
         </>

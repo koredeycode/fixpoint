@@ -5,9 +5,200 @@
 import { App } from "./store.js";
 import { installObservability } from "./observability.js";
 
+const PROVIDER_KEY_URLS = {
+  Otari: "https://otari.ai/dashboard#/keys",
+  "Google AI Studio": "https://aistudio.google.com/apikey",
+  Groq: "https://console.groq.com/keys",
+  OpenRouter: "https://openrouter.ai/settings/keys",
+  OpenAI: "https://platform.openai.com/api-keys",
+  Anthropic: "https://console.anthropic.com/settings/keys",
+};
+
+/**
+ * Turn the BYOK panel into a guided flow:
+ * selectable provider cards (incl. Custom) → "get a key" link for the chosen
+ * provider → Provider URL → API key → model → actions. Secondary setup fields
+ * are grouped at the bottom. Provider cards select, they do not navigate.
+ */
+function reorderSettings() {
+  const body = document.querySelector("#agent-app .ns-settings-body");
+  if (!body) return;
+  const labelFor = (id) =>
+    [...body.querySelectorAll("label")].find((label) => label.querySelector(`#${id}`));
+  const help = body.querySelector(".ns-key-help");
+  const providers = help?.querySelector(".ns-key-providers");
+  const routerLabel = labelFor("ns-router");
+  const keyLabel = labelFor("ns-key");
+  const modelLabel = labelFor("ns-model");
+  const actions = body.querySelector(".ns-start-actions");
+
+  const routerEl = body.querySelector("#ns-router");
+  const modelEl = body.querySelector("#ns-model");
+  const keyEl = body.querySelector("#ns-key");
+  const nameEl = body.querySelector("#ns-profile-name");
+
+  const keyLine = document.createElement("p");
+  keyLine.className = "ns-get-key";
+  const keyText = document.createElement("span");
+  const keyLink = document.createElement("a");
+  keyLink.target = "_blank";
+  keyLink.rel = "noopener noreferrer";
+  keyLine.append(keyText, keyLink);
+
+  const selectProvider = (name, router, model) => {
+    if (routerEl) {
+      routerEl.value = router || "";
+      routerEl.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (modelEl) modelEl.value = model || "";
+    if (nameEl) nameEl.value = name || "Custom";
+    keyText.textContent =
+      name && name !== "Custom"
+        ? `Don't have an API key? Get one from ${name}. `
+        : "Don't have an API key? ";
+    keyLink.textContent = name === "Custom" ? "choose an endpoint" : "Get a key ↗";
+    keyLink.href = PROVIDER_KEY_URLS[name] || "#";
+    keyLink.hidden = name === "Custom";
+    for (const card of providers?.querySelectorAll("[data-ns-provider]") || []) {
+      card.setAttribute("aria-pressed", String(card.dataset.nsProvider === name));
+    }
+    providers
+      ?.querySelector(".ns-provider-custom")
+      ?.setAttribute("aria-pressed", String(name === "Custom"));
+  };
+
+  if (providers) {
+    const providerLabel = document.createElement("div");
+    providerLabel.className = "ns-select-provider-label";
+    providerLabel.textContent = "Select provider";
+    providers.before(providerLabel);
+
+    for (const card of providers.querySelectorAll("a[data-ns-provider]")) {
+      const name = card.dataset.nsProvider;
+      // Capture phase stops the runtime's own handler from opening a new tab.
+      card.addEventListener(
+        "click",
+        (event) => {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          selectProvider(name, card.dataset.router, card.dataset.model);
+        },
+        true,
+      );
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectProvider(name, card.dataset.router, card.dataset.model);
+        }
+      });
+      card.removeAttribute("href");
+      card.removeAttribute("target");
+      card.setAttribute("role", "button");
+      card.setAttribute("tabindex", "0");
+    }
+
+    const custom = document.createElement("button");
+    custom.type = "button";
+    custom.className = "ns-provider-custom";
+    custom.innerHTML =
+      '<span aria-hidden="true">+</span><span>Custom provider<small>Enter your own endpoint</small></span>';
+    custom.addEventListener("click", () => selectProvider("Custom", "", ""));
+    providers.appendChild(custom);
+    providers.after(keyLine);
+  }
+
+  // Both runtime hints are redundant next to our compact copy.
+  for (const hint of body.querySelectorAll(".ns-hint")) hint.hidden = true;
+  body.querySelector(".ns-in-use")?.removeAttribute("title");
+
+  const more = document.createElement("details");
+  more.className = "ns-more-setup";
+  const moreSummary = document.createElement("summary");
+  moreSummary.textContent = "More setup options";
+  more.append(moreSummary);
+  for (const element of [
+    labelFor("ns-profile-name"),
+    body.querySelector("#ns-router-hint"),
+    body.querySelector(".ns-profile-actions"),
+    body.querySelector("#ns-profile-hint"),
+    body.querySelector(".ns-openrouter-key"),
+  ]) {
+    if (element) more.appendChild(element);
+  }
+
+  const extras = document.createElement("div");
+  extras.className = "ns-setup-extras";
+  for (const element of [body.querySelector(".ns-in-use"), labelFor("ns-profile"), more]) {
+    if (element) extras.appendChild(element);
+  }
+
+  // Native <option> elements cannot be styled reliably, so give Saved setup a
+  // custom listbox while keeping the real <select> for the runtime.
+  const select = extras.querySelector("#ns-profile") || document.querySelector("#ns-profile");
+  if (select && !select.dataset.customDropdown) {
+    select.dataset.customDropdown = "true";
+    select.style.display = "none";
+    const wrap = document.createElement("div");
+    wrap.className = "ns-profile-wrap";
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "ns-profile-trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+    const value = document.createElement("span");
+    const arrow = document.createElement("span");
+    arrow.className = "ns-profile-arrow";
+    trigger.append(value, arrow);
+    const menu = document.createElement("div");
+    menu.className = "ns-profile-menu";
+    menu.setAttribute("role", "listbox");
+    menu.hidden = true;
+    wrap.append(trigger, menu);
+    select.after(wrap);
+
+    const sync = () => {
+      value.textContent = select.selectedOptions[0]?.textContent || "Custom / unsaved";
+    };
+    const build = () => {
+      menu.replaceChildren();
+      for (const option of select.options) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "ns-profile-option";
+        item.setAttribute("role", "option");
+        item.textContent = option.textContent;
+        item.setAttribute("aria-selected", String(option.value === select.value));
+        item.addEventListener("click", () => {
+          select.value = option.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          menu.hidden = true;
+          trigger.setAttribute("aria-expanded", "false");
+          sync();
+        });
+        menu.appendChild(item);
+      }
+    };
+    trigger.addEventListener("click", () => {
+      build();
+      menu.hidden = !menu.hidden;
+      trigger.setAttribute("aria-expanded", String(!menu.hidden));
+    });
+    select.addEventListener("change", sync);
+    new MutationObserver(build).observe(select, { childList: true });
+    build();
+    sync();
+  }
+
+  for (const element of [help, routerLabel, keyLabel, modelLabel, actions, extras]) {
+    if (element) body.appendChild(element);
+  }
+}
+
 export class AssistantMount {
   static GREETING =
     "I can diagnose faults from the Fixpoint manuals, stage the right part, and book a pro — using your own AI key.";
+  static NEEDS_KEY_GREETING =
+    "Add your AI key in AI model settings below, then describe a symptom.";
 
   static DIALOGS = {
     book_repair: {
@@ -21,46 +212,53 @@ export class AssistantMount {
 
   static async start() {
     if (AssistantMount.engine) return AssistantMount.engine;
-    const status = document.querySelector("#assistant-status");
-    const siteBase = new URL("./", import.meta.url).href;
-    try {
-      const { boot } = await import("./runtime/index.js");
-      const booted = await boot("#agent-app", {
-        originUrl: siteBase,
-        sandboxWorkerUrl: new URL("runtime/sandbox-worker.js", siteBase).href,
-      });
-      AssistantMount.engine = booted.engine;
-      AssistantMount.defaultReview = booted.engine.onActionConfirm;
-      booted.engine.onActionConfirm = AssistantMount.review;
-      AssistantMount.defaultConsent = booted.engine.onConsent;
-      booted.engine.onConsent = AssistantMount.consent;
+    if (AssistantMount.bootPromise) return AssistantMount.bootPromise;
+    AssistantMount.bootPromise = (async () => {
+      const status = document.querySelector("#assistant-status");
+      const siteBase = new URL("./", import.meta.url).href;
+      try {
+        const { boot } = await import("./runtime/index.js");
+        const booted = await boot("#agent-app", {
+          originUrl: siteBase,
+          sandboxWorkerUrl: new URL("runtime/sandbox-worker.js", siteBase).href,
+        });
+        AssistantMount.engine = booted.engine;
+        AssistantMount.defaultReview = booted.engine.onActionConfirm;
+        booted.engine.onActionConfirm = AssistantMount.review;
+        AssistantMount.defaultConsent = booted.engine.onConsent;
+        booted.engine.onConsent = AssistantMount.consent;
 
-      installObservability(booted.engine);
-      window.__FIXPOINT_OBS__?.note("assistant_boot", {
-        origin: siteBase,
-        needsKey: !booted.engine.byokKey || booted.engine.byokKey === "demo",
-      });
+        installObservability(booted.engine);
+        window.__FIXPOINT_OBS__?.note("assistant_boot", {
+          origin: siteBase,
+          needsKey: !booted.engine.byokKey || booted.engine.byokKey === "demo",
+        });
 
-      const needsKey =
-        !booted.engine.mockLLM && (!booted.engine.byokKey || booted.engine.byokKey === "demo");
-      if (status) {
-        status.textContent = needsKey
-          ? "Add your AI provider key in AI model settings below to start."
-          : "Assistant connected to this page.";
+        const needsKey =
+          !booted.engine.mockLLM && (!booted.engine.byokKey || booted.engine.byokKey === "demo");
+        if (status) {
+          status.textContent = needsKey
+            ? "Add your AI key in settings below to start."
+            : "Assistant connected to this page.";
+        }
+        reorderSettings();
+        AssistantMount.greet(needsKey);
+        return booted.engine;
+      } catch (error) {
+        if (status)
+          status.textContent = "The assistant could not load. You can still use the site directly.";
+        console.error("Assistant startup failed", error);
+        return null;
       }
-      if (!needsKey) AssistantMount.greet();
-      return booted.engine;
-    } catch (error) {
-      if (status)
-        status.textContent = "The assistant could not load. You can still use the site directly.";
-      console.error("Assistant startup failed", error);
-      return null;
-    }
+    })();
+    return AssistantMount.bootPromise;
   }
 
-  static greet() {
+  static greet(needsKey = false) {
     const first = document.querySelector("#ns-msgs .ns-msg.bot");
-    if (first) first.textContent = AssistantMount.GREETING;
+    if (first) {
+      first.textContent = needsKey ? AssistantMount.NEEDS_KEY_GREETING : AssistantMount.GREETING;
+    }
   }
 
   static async review(items) {
@@ -206,6 +404,9 @@ export class AssistantMount {
 }
 
 // Exposed for React. Do NOT auto-boot here: React must render #agent-app first.
+// Vite injects the React bundle into <head>, so React's effect can run before this
+// body script executes. Announce readiness explicitly so the island can boot.
 if (typeof window !== "undefined") {
   window.__FIXPOINT_MOUNT__ = AssistantMount;
+  window.dispatchEvent(new CustomEvent("fixpoint:mount-ready"));
 }

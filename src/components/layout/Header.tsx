@@ -1,3 +1,4 @@
+import { Wrench } from "lucide-react";
 import type { NavItem, PageId } from "../../types/navigation";
 
 const ITEMS: NavItem[] = [
@@ -14,32 +15,40 @@ interface HeaderProps {
   kitCount: number;
 }
 
-/** Site-wide navigation. A layout component: no feature state beyond its props. */
+/** Site-wide navigation: brand row, then one scrollable row of links on mobile. */
 export default function Header({ page, onNavigate, kitCount }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-4 border-b border-ink-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-10">
-      <button
-        onClick={() => onNavigate("home")}
-        aria-label="Fixpoint home"
-        className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-brand-700"
-      >
-        <span
-          aria-hidden="true"
-          className="grid size-8 place-items-center rounded-lg bg-brand-600 text-white"
+    <header className="sticky top-0 z-20 border-b border-ink-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-10">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          onClick={() => onNavigate("home")}
+          aria-label="Fixpoint home"
+          className="flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-brand-700 sm:text-xl"
         >
-          ✦
-        </span>
-        Fixpoint
-      </button>
+          <span
+            aria-hidden="true"
+            className="grid size-8 place-items-center rounded-lg bg-brand-600 text-white"
+          >
+            <Wrench size={17} strokeWidth={2.4} />
+          </span>
+          Fixpoint
+        </button>
+        <button
+          onClick={() => onNavigate("assistant")}
+          className="shrink-0 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white sm:hidden"
+        >
+          Ask Fixpoint
+        </button>
+      </div>
 
-      <nav aria-label="Main navigation">
-        <ul className="flex flex-wrap items-center gap-1">
+      <nav aria-label="Main navigation" className="mt-2 sm:mt-0">
+        <ul className="flex items-center gap-1 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
           {ITEMS.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className="shrink-0">
               <button
                 onClick={() => onNavigate(item.id)}
                 aria-current={page === item.id ? "page" : undefined}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   page === item.id
                     ? "bg-brand-100 text-brand-700"
                     : "text-ink-600 hover:bg-paper hover:text-ink-900"
@@ -57,10 +66,10 @@ export default function Header({ page, onNavigate, kitCount }: HeaderProps) {
               </button>
             </li>
           ))}
-          <li>
+          <li className="hidden shrink-0 sm:block">
             <button
               onClick={() => onNavigate("assistant")}
-              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
             >
               Ask the assistant
             </button>

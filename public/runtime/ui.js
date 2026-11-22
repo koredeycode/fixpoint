@@ -28,6 +28,30 @@ import { reviewActions, setActionWindowPrompt } from "./action-transport.js";
 import { OpenRouterConnect } from "./openrouter-connect.js";
 import { InUseLine } from "./in-use-line.js";
 
+// Local patch (agentic-web): the transparency panels used emoji glyphs. Map
+// stable tokens to inline Lucide-style SVG icons instead. Unknown values stay
+// escaped text so publisher-supplied brand characters remain safe.
+const ICON_PATHS = {
+  compass:
+    '<circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>',
+  building:
+    '<rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M9 22v-4h6v4M9 6h.01M15 6h.01M9 10h.01M15 10h.01M9 14h.01M15 14h.01"></path>',
+  globe:
+    '<circle cx="12" cy="12" r="10"></circle><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>',
+  link:
+    '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
+  gear:
+    '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>',
+  undo: '<path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path>',
+  alert:
+    '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><path d="M12 9v4M12 17h.01"></path>',
+};
+function iconSvg(icon) {
+  const body = ICON_PATHS[icon];
+  if (!body) return escapeHtml(icon || "");
+  return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
 export const AI_MODEL_SETTINGS_LABEL = "AI model settings";
 export const API_KEY_HELP_URL = "https://ai.google.dev/gemini-api/docs/api-key";
 export const API_KEY_PROVIDERS = [
@@ -335,8 +359,8 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
   // The Connect button needs an https page (or this computer's own address) in its own tab.
   const canConnect = OpenRouterConnect.isAvailable();
   const setupMessage = canConnect
-    ? `To start, connect an AI provider. In ⚙ ${AI_MODEL_SETTINGS_LABEL}, select Connect with OpenRouter. Or choose a provider, create a key on its site, paste it into the API key field and select Save and start. Your key is saved in this browser.`
-    : `To start, add an AI provider key. In ⚙ ${AI_MODEL_SETTINGS_LABEL}, choose a provider, create a key on its site, and paste it into the API key field. Then select Save and start. Your key is saved in this browser.`;
+    ? `To start, connect an AI provider. In ${AI_MODEL_SETTINGS_LABEL}, select Connect with OpenRouter. Or choose a provider, create a key on its site, paste it into the API key field and select Save and start. Your key is saved in this browser.`
+    : `To start, add an AI provider key. In ${AI_MODEL_SETTINGS_LABEL}, choose a provider, create a key on its site, and paste it into the API key field. Then select Save and start. Your key is saved in this browser.`;
   const chatSlot = root.querySelector('[data-ns-slot="chat"]');
   const agentsSlot = root.querySelector('[data-ns-slot="agents"]');
   const activitySlot = root.querySelector('[data-ns-slot="activity"]');
@@ -394,7 +418,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
     </div>`;
   const settingsHtml = `
     <details class="ns-settings"${needsByok ? " open" : ""}>
-      <summary>⚙ ${AI_MODEL_SETTINGS_LABEL}</summary>
+      <summary>${iconSvg("gear")} ${AI_MODEL_SETTINGS_LABEL}</summary>
       ${settingsBodyHtml}
     </details>`;
 
@@ -403,12 +427,12 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       ${theme.logo ? `<img class="ns-logo" src="${theme.logo}" alt="logo">` : ""}
       <div class="ns-title">${escapeHtml(manifest?.brand || net?.name || "neuro-san-web")}</div>
       ${engine.mockLLM
-        ? `<div class="ns-llmbadge mock" title="The default router is a deterministic mock — it ignores the model name. Add a real key + router in ⚙ settings.">⚠ MOCK LLM — no real model</div>`
+        ? `<div class="ns-llmbadge mock" title="The default router is a deterministic mock — it ignores the model name. Add a real key + router in settings.">${iconSvg("alert")} MOCK LLM — no real model</div>`
         : needsByok
           ? `<div class="ns-llmbadge error" title="${escapeHtml(setupMessage)}">API key required</div>`
         : `<div class="ns-llmbadge pending" title="Configured router: ${escapeHtml(engine.top?.llm?.baseUrl || "")}. It will be verified by the first response.">LLM configured — awaiting verification</div>`}
       <div class="ns-breadcrumb" id="ns-breadcrumb">${escapeHtml(location.host)}</div>
-      <button class="ns-devtoggle" id="ns-devtoggle" title="Show the technical execution trace">⚙ Developer</button>
+      <button class="ns-devtoggle" id="ns-devtoggle" title="Show the technical execution trace">${iconSvg("gear")} Developer</button>
     </div>`;
   const chatHtml = `
     <div class="ns-chat">
@@ -536,7 +560,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
               badge.title = `A model call from ${ev.origin || "a linked network"} reached the mock router.`;
             } else {
               badge.className = "ns-llmbadge mock";
-              badge.textContent = "⚠ MOCK LLM — no real model";
+              badge.textContent = "MOCK LLM — no real model";
               badge.title = "The endpoint returned the nsDeploy mock model.";
             }
           } else if (routingViolation) {
@@ -655,7 +679,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
     } catch (err) {
       turnStatusController.clear();
-      addBubble(msgs, "bot", "⚠️ " + err.message);
+      addBubble(msgs, "bot", err.message);
     } finally {
       turnStatusController.clear();
       if (activeTurnStream === stream) activeTurnStream = null;
@@ -761,7 +785,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
   const splitBrand = (brand) => {
     const ch = Array.from(brand || "");
     if (ch[0] && ch[0].codePointAt(0) > 0x2000) return { icon: ch[0], label: ch.slice(1).join("").trim() };
-    return { icon: "🧭", label: brand || "" };
+    return { icon: "compass", label: brand || "" };
   };
   const localHost = location.host;
   const nodeMeta = new Map(); // host -> {label, role, icon, kind, origin, address}
@@ -782,10 +806,10 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
         const u = new URL(ref);
         // The same name the consent card uses: this page's link_labels, else the network's.
         const label = net.linkLabels?.[ref] || networkNameOf(u);
-        if (!nodeMeta.has(u.host)) nodeMeta.set(u.host, { label: label, role: "partner network", icon: "🏢", kind: "remote", origin: u.origin, address: addressOf(u) });
+        if (!nodeMeta.has(u.host)) nodeMeta.set(u.host, { label: label, role: "partner network", icon: "building", kind: "remote", origin: u.origin, address: addressOf(u) });
       } else if (c.kind === "mcp") {
         const u = new URL(typeof ref === "string" ? ref : ref.url);
-        if (!nodeMeta.has(u.host)) nodeMeta.set(u.host, { label: "Destination service", role: "hosted MCP server", icon: "🌐", kind: "mcp", origin: u.origin, address: addressOf(u) });
+        if (!nodeMeta.has(u.host)) nodeMeta.set(u.host, { label: "Destination service", role: "hosted MCP server", icon: "globe", kind: "mcp", origin: u.origin, address: addressOf(u) });
       }
     } catch {}
   }
@@ -805,7 +829,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       meta = {
         label: b.label || display,
         role: "partner network",
-        icon: b.icon || "🏢",
+        icon: b.icon || "building",
         kind: "remote",
         origin: host.startsWith("http") ? host : `http://${host}`,
         address: address,
@@ -832,7 +856,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       const address = meta.address
         ? `<div class="ns-aaddr">${escapeHtml(meta.address).replace(/[/_]/g, "$&<wbr>")}</div>`
         : "";
-      el.innerHTML = `<span class="ns-aicon">${escapeHtml(meta.icon)}</span>` +
+      el.innerHTML = `<span class="ns-aicon">${iconSvg(meta.icon)}</span>` +
         `<div class="ns-ameta"><div class="ns-aname">${escapeHtml(meta.label)}</div><div class="ns-arole">${escapeHtml(meta.role)}</div>${address}</div>` +
         `<span class="ns-adot" title="${st}"></span>`;
       el.addEventListener("click", () => openInspector(host));
@@ -920,7 +944,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       if (!host) { input.setCustomValidity("Enter a complete http:// or https:// URL."); input.reportValidity(); return; }
       input.setCustomValidity("");
       if (!nodeMeta.has(host)) {
-        nodeMeta.set(host, { label: host, role: "linked partner network", icon: "🏢", kind: "remote", origin: new URL(target).origin });
+        nodeMeta.set(host, { label: host, role: "linked partner network", icon: "building", kind: "remote", origin: new URL(target).origin });
         renderANodes();
       }
       form.innerHTML = `<div class="ns-consent-done">Linked to ${escapeHtml(host)}. Validating…</div>`;
@@ -948,7 +972,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
     const el = document.createElement("div");
     el.className = "ns-msg bot ns-consent";
     el.innerHTML =
-      `<div class="ns-consent-title">🔗 Contact <b>${escapeHtml(info.peerLabel)}</b> on your behalf?</div>` +
+      `<div class="ns-consent-title">${iconSvg("link")} Contact <b>${escapeHtml(info.peerLabel)}</b> on your behalf?</div>` +
       `<div class="ns-consent-sub">${escapeHtml(info.peerOrigin)}${tokens ? " · est. " + escapeHtml(tokens) + escapeHtml(cost) : ""}</div>` +
       (info.requestText ? `<div class="ns-consent-req">“${escapeHtml(info.requestText.slice(0, 140))}”</div>` : "") +
       `<div class="ns-consent-actions">` +
@@ -1213,7 +1237,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
     const hasKey = keyEl.value.trim().length > 0;
     if (hasKey && isMockRouter(routerEl.value.trim())) {
       hintEl.className = "ns-hint warn";
-      hintEl.textContent = `⚠ This router is the MOCK (ignores your key). It will be switched to the real proxy ${byokRouter || ""} when you save.`;
+      hintEl.textContent = `This router is the MOCK (ignores your key). It will be switched to the real proxy ${byokRouter || ""} when you save.`;
     } else if (isMockRouter(routerEl.value.trim())) {
       hintEl.className = "ns-hint";
       hintEl.textContent = `Mock router (no key needed). To use a real LLM, enter a key — it will route via ${byokRouter || "the proxy"}.`;
@@ -1302,7 +1326,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       setProfileHint(message, "warn");
       root.querySelector(".ns-settings").open = true;
       (key ? root.querySelector("#ns-apply") : keyEl).focus();
-      addBubble(msgs, "bot", `⚠️ ${message}`);
+      addBubble(msgs, "bot", `${message}`);
       return false;
     }
     if (lacksModel(requireActiveKey, router, key, model)) {
@@ -1315,7 +1339,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       root.querySelector(".ns-settings").open = true;
       if (unapplied) root.querySelector("#ns-apply").focus();
       else focusModelField();
-      addBubble(msgs, "bot", `⚠️ ${message}`);
+      addBubble(msgs, "bot", `${message}`);
       return false;
     }
     if (!model) return true;
@@ -1433,7 +1457,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
   if (connect) {
     const connected = connect.status === "connected";
     setProfileHint(connect.message, connected ? "" : "warn");
-    addBubble(msgs, "bot", connected ? connect.message : `⚠️ ${connect.message}`);
+    addBubble(msgs, "bot", connected ? connect.message : `${connect.message}`);
     if (!connected) root.querySelector(".ns-settings").open = true;
   }
 
@@ -1717,7 +1741,7 @@ function renderNodes(el, net, activeAgents, activeOrigins = new Set()) {
 
   function box(cls, icon, label, { active = false, dot = false, title = "" } = {}) {
     return `<div class="ns-tbox ${cls}${active ? " active" : ""}"${title ? ` title="${escapeHtml(title)}"` : ""}>` +
-      `${icon ? `<span class="ns-ticon">${icon}</span>` : ""}<span>${escapeHtml(label)}</span>` +
+      `${icon ? `<span class="ns-ticon">${iconSvg(icon)}</span>` : ""}<span>${escapeHtml(label)}</span>` +
       `${dot ? '<span class="ns-tdot"></span>' : ""}</div>`;
   }
 
@@ -1729,15 +1753,15 @@ function renderNodes(el, net, activeAgents, activeOrigins = new Set()) {
       let kind = "missing";
       try { kind = net.classifyTool(ref).kind; } catch {}
       if (kind === "agent" && isAgent(ref)) {
-        kids.push(`<li>${rendered.has(ref) ? box("leaf", "↩", ref, { title: "defined above" }) : node(ref)}</li>`);
+        kids.push(`<li>${rendered.has(ref) ? box("leaf", "undo", ref, { title: "defined above" }) : node(ref)}</li>`);
       } else if (kind === "mcp") {
-        const h = hostOfRef(ref); kids.push(`<li>${box("leaf", "🌐", h, { active: activeOrigins.has(h) })}</li>`);
+        const h = hostOfRef(ref); kids.push(`<li>${box("leaf", "globe", h, { active: activeOrigins.has(h) })}</li>`);
       } else if (kind === "remote") {
-        const h = hostOfRef(ref); kids.push(`<li>${box("leaf", "🏢", h, { active: activeOrigins.has(h) })}</li>`);
+        const h = hostOfRef(ref); kids.push(`<li>${box("leaf", "building", h, { active: activeOrigins.has(h) })}</li>`);
       } else if (kind === "link") {
-        kids.push(`<li>${box("leaf", "🔗", ref, { title: "pending agent-network link" })}</li>`);
+        kids.push(`<li>${box("leaf", "link", ref, { title: "pending agent-network link" })}</li>`);
       } else if (kind === "coded" || kind === "toolbox") {
-        kids.push(`<li>${box("leaf", "⚙", typeof ref === "string" ? ref : (ref.url || "tool"))}</li>`);
+        kids.push(`<li>${box("leaf", "gear", typeof ref === "string" ? ref : (ref.url || "tool"))}</li>`);
       }
     }
     const self = box("agent" + (name === front ? " root" : ""), "", name,

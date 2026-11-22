@@ -86,6 +86,11 @@ Added files:
 - `in-use-line.js` builds the "In use" line of ⚙ AI model settings: the provider, the
   model and the last four characters of the key the chat uses.
 
+Local Fixpoint patch (21 Nov 2026): `ui.js` replaces the emoji glyphs in the
+"Agents working for you" map and the agent tree with inline Lucide-style SVG
+icons (`iconSvg` helper + icon tokens). Re-copying this runtime from upstream
+will lose that patch.
+
 Protocol name: `nsdeploy`. Use it for `<protocol_name>` in `agent-manifest.json`. It
 names the discovery files, such as `.well-known/nsdeploy.json`, that nsdeploy's tools read.
 
