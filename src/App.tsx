@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
 import Hero from "./components/features/Hero";
@@ -8,7 +8,7 @@ import RepairKit from "./components/features/RepairKit";
 import BookingPage from "./components/features/BookingPage";
 import AssistantWidget from "./components/assistant/AssistantWidget";
 import ObservabilityPanel from "./components/dev/ObservabilityPanel";
-import { useSiteState } from "./lib/siteBridge";
+import { callPage, useSiteState } from "./lib/siteBridge";
 import type { PageId } from "./types/navigation";
 
 /**
@@ -19,6 +19,24 @@ export default function App() {
   const [page, setPage] = useState<PageId>("home");
   const state = useSiteState();
   const kitCount = state.kit.items.reduce((n, item) => n + item.quantity, 0);
+
+  // Stable citation links: #<appliance>--<symptom> opens that exact manual entry.
+  useEffect(() => {
+    const applyHash = () => {
+      const raw = window.location.hash.replace(/^#/, "");
+      if (!raw || raw === "manual_library") {
+        if (raw === "manual_library") setPage("manuals");
+        return;
+      }
+      const [applianceId, symptomId] = raw.split("--");
+      if (!applianceId || !symptomId) return;
+      const result = callPage<{ ok: boolean }>("setSelectedSymptom", applianceId, symptomId);
+      if (result?.ok !== false) setPage("symptoms");
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
 
   function navigate(next: PageId) {
     if (next === "assistant") {

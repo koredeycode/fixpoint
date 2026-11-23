@@ -108,6 +108,7 @@ export default function AssistantWidget() {
       const controller = new AbortController();
       suggestController.current = controller;
       setGenerating(true);
+      window.__FIXPOINT_OBS__?.note("suggestion_request", { note: "generating follow-ups" });
       try {
         const history = [...document.querySelectorAll("#ns-msgs .ns-msg")]
           .slice(-8)
@@ -178,8 +179,12 @@ export default function AssistantWidget() {
             .slice(0, 3)
             .map((line) => ({ text: line }));
         }
+        window.__FIXPOINT_OBS__?.note("suggestion_result", {
+          note: items.map((item) => item.text).join(" | "),
+        });
         if (items.length) setGenerated(items);
       } catch {
+        window.__FIXPOINT_OBS__?.note("suggestion_error", { note: "follow-up call failed" });
         setGenerated([]);
       } finally {
         if (!controller.signal.aborted) setGenerating(false);
