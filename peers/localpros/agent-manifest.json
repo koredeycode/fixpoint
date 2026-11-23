@@ -1,0 +1,67 @@
+{
+  "brand": "Local Repair Pros",
+  "networks": [
+    {
+      "name": "localpros",
+      "front_man": "pro_desk",
+      "hocon": "./localpros.network.json",
+      "description": "Real repair slots from Local Repair Pros, with exact times and prices, shared as a peer network for Fixpoint.",
+      "tags": ["peer-network", "repair", "booking"],
+      "sample_queries": [
+        "What repair slots do you have?",
+        "Do you have a morning slot?",
+        "How much is an afternoon visit?"
+      ]
+    }
+  ],
+  "llm_router": {
+    "base_url": "https://api.otari.ai/api/v1",
+    "mock": false,
+    "byok_router": "https://api.otari.ai/api/v1"
+  },
+  "allowed_peers": [],
+  "peer_policy": {
+    "mode": "closed",
+    "deny_origins": [],
+    "note": "This static peer exposes only read-only slot data through its action bridge."
+  },
+  "agent_mcp": {
+    "protocol": "nsdeploy-agent-mcp/v1",
+    "network": "localpros",
+    "front_man": "pro_desk",
+    "available": false,
+    "reason": "Static bundle; a public MCP facade requires an application host."
+  },
+  "theme": {
+    "primary": "#0f766e"
+  },
+  "linking": {
+    "protocol": "nsdeploy-link/v1",
+    "exports": [
+      {
+        "network": "localpros",
+        "front_man": "pro_desk",
+        "aliases": ["localpros", "pro_desk"],
+        "url": "https://localpros-fixpoint.vercel.app/localpros"
+      }
+    ],
+    "imports": [],
+    "link_updates": {
+      "mode": "browser-local"
+    }
+  },
+  "deployment": {
+    "mode": "static",
+    "self_contained_runtime": true,
+    "browser_mock": false,
+    "direct_byok": true,
+    "direct_mcp_requires_cors": true,
+    "public_mcp_facade": false
+  },
+  "actions": {
+    "version": 1,
+    "module": "./site-actions.js",
+    "bridge": "./bridge/action-bridge.html",
+    "agentTools": ["available_slots"]
+  }
+}

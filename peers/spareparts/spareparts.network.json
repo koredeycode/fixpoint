@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "description": "SpareParts Co answers stock, price and ETA questions for spare parts by part id.",
+    "sample_queries": ["Do you have belt_42 in stock?", "What is the price and ETA for pump_17?"]
+  },
+  "llm_config": {
+    "model_name": "alibaba/qwen3.8-flash"
+  },
+  "max_steps": 5,
+  "max_execution_seconds": 60,
+  "tools": [
+    {
+      "name": "parts_desk",
+      "function": {
+        "description": "Front desk for SpareParts Co: look up real stock, price and ETA for a part id and report the exact result.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "string",
+              "description": "The part id, or the visitor's stock question in plain language."
+            }
+          },
+          "required": ["request"]
+        }
+      },
+      "instructions": "\nYou are the SpareParts Co peer. Call website_check_stock with the part id from the request and return its exact result as short plain text. Never invent stock, prices or ETAs.\n",
+      "tools": []
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 {
   "version": 1,
   "networks": {
-    "fixpoint": {}
+    "fixpoint": {
+      "parts_supplier": "https://spareparts-fixpoint.vercel.app/spareparts",
+      "repair_pro": "https://localpros-fixpoint.vercel.app/localpros"
+    }
   }
 }

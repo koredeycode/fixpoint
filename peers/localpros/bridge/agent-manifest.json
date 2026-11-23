@@ -1,0 +1,12 @@
+{
+  "networks": [
+    {
+      "name": "localpros"
+    }
+  ],
+  "actions": {
+    "version": 1,
+    "module": "./bridge-actions.js",
+    "agentTools": ["available_slots"]
+  }
+}
