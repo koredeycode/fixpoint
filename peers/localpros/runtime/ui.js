@@ -2131,6 +2131,8 @@ function detailJson(ev) {
     "requestPayload",
     "args",
     "result",
+    "resultPreview",
+    "resultBytes",
     "presentation",
     "issues",
     "invocation",
@@ -2149,6 +2151,9 @@ function detailJson(ev) {
     "endpoint",
     "routerHost",
     "mock",
+    "streamText",
+    "streamChunks",
+    "chunkCount",
   ]) {
     if (ev[k] !== undefined) keep[k] = ev[k];
   }

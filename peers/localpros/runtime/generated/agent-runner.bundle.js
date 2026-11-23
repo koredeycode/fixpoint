@@ -53990,16 +53990,14 @@ var ui = class extends Le {
           );
         return { status: r.value, value: a };
       } else
-        return this._def.schema
-          ._parseAsync({ data: n.data, path: n.path, parent: n })
-          .then((s) =>
-            _a(s)
-              ? Promise.resolve(i.transform(s.value, o)).then((a) => ({
-                  status: r.value,
-                  value: a,
-                }))
-              : ye,
-          );
+        return this._def.schema._parseAsync({ data: n.data, path: n.path, parent: n }).then((s) =>
+          _a(s)
+            ? Promise.resolve(i.transform(s.value, o)).then((a) => ({
+                status: r.value,
+                value: a,
+              }))
+            : ye,
+        );
     Ke.assertNever(i);
   }
 };

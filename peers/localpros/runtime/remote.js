@@ -3,19 +3,83 @@
 // locally. This is the "fetch-and-run-locally" cross-origin composition model:
 // there is no agent server — the caller's browser runs the peer's published files.
 
-export async function fetchManifest(originUrl) {
-  const base = originUrl.replace(/\/$/, "");
-  const url = `${base}/agent-manifest.json`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`manifest fetch ${resp.status} for ${url}`);
-  const manifest = await resp.json();
-  return { manifest, base, url };
+const DEFAULT_FETCH_TIMEOUT_MS = 8000;
+
+/** Classify a peer-fetch failure. Never turns a failure into a business result. */
+export function classifyFetchError(error, response) {
+  if (error?.kind) return error.kind;
+  if (error?.name === "AbortError") return "timeout";
+  if (response && !response.ok) return "http_error";
+  const message = String(error?.message || error || "");
+  if (/cors|cross-origin|access-control/i.test(message)) return "cors_blocked";
+  if (/abort|timeout|timed out/i.test(message)) return "timeout";
+  if (/empty|unexpected end of json|no body/i.test(message)) return "empty_reply";
+  return "network_unreachable";
 }
 
-export async function fetchText(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`fetch ${resp.status} for ${url}`);
-  return resp.text();
+function tagFetchError(error, kind, url) {
+  const target = error instanceof Error ? error : new Error(String(error));
+  target.kind = kind;
+  target.rawMessage = String(error?.message || error);
+  target.url = url;
+  return target;
+}
+
+export async function fetchManifest(originUrl, { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS } = {}) {
+  const base = originUrl.replace(/\/$/, "");
+  const url = `${base}/agent-manifest.json`;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      throw tagFetchError(new Error(`manifest fetch ${resp.status} for ${url}`), "http_error", url);
+    }
+    let manifest;
+    try {
+      manifest = await resp.json();
+    } catch (err) {
+      throw tagFetchError(err, "empty_reply", url);
+    }
+    if (!manifest || !Array.isArray(manifest.networks) || !manifest.networks.length) {
+      throw tagFetchError(new Error(`empty manifest for ${url}`), "empty_reply", url);
+    }
+    return { manifest, base, url };
+  } catch (err) {
+    const kind = timedOut ? "timeout" : classifyFetchError(err);
+    if (!err?.kind) tagFetchError(err, kind, url);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchText(url, { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS } = {}) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      throw tagFetchError(new Error(`fetch ${resp.status} for ${url}`), "http_error", url);
+    }
+    const text = await resp.text();
+    if (!text) throw tagFetchError(new Error(`empty reply for ${url}`), "empty_reply", url);
+    return text;
+  } catch (err) {
+    const kind = timedOut ? "timeout" : classifyFetchError(err);
+    if (!err?.kind) tagFetchError(err, kind, url);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Resolve a relative path against an origin base.

@@ -9,7 +9,7 @@ import { AgentNetwork, validateNetwork, parseExternalAgent, redactSlyData, ChatM
 import { LlmClient } from "./llm.js";
 import { ToolSandbox } from "./sandbox.js";
 import { TraceBus } from "./trace.js";
-import { fetchManifest, fetchText, resolveUrl, RemoteRegistry } from "./remote.js";
+import { classifyFetchError, fetchManifest, fetchText, resolveUrl, RemoteRegistry } from "./remote.js";
 import { runAgent } from "./runner.js";
 import { McpClient } from "./mcp.js";
 import { fallbackModel, normalizeModelName } from "./model.js";
@@ -426,11 +426,15 @@ export class Engine {
     const cached = this.registry.get(origin, lastSeg);
     if (cached) return cached;
 
+    const manifestUrl = `${origin}/agent-manifest.json`;
     const fetchSpan = this.trace.start("remote_fetch", {
       parent: parentSpan,
       origin: hostOf(this.top.base),
       peerOrigin: hostOf(origin),
       url: ref,
+      peerRef: ref,
+      manifestUrl,
+      attemptedUrls: [manifestUrl],
     });
     let session;
     try {
@@ -448,12 +452,31 @@ export class Engine {
       };
       const { network, bundleUrl, integrity, llm } = await this._compile(base, manifest, entry);
       await registerRemoteActions(this.actions, { base, network: network.name }, manifest);
-      this.trace.end(fetchSpan, { network: network.name, fetchedUrls, peerOrigin: hostOf(origin), brand: manifest.brand });
+      this.trace.end(fetchSpan, {
+        network: network.name,
+        fetchedUrls,
+        peerRef: ref,
+        manifestUrl,
+        attemptedUrls: [manifestUrl, fetchedUrls.hocon],
+        peerOrigin: hostOf(origin),
+        brand: manifest.brand,
+      });
       session = new Session(this, { network, base, bundleUrl, integrity, manifest, llm, fetchedUrls, brand: manifest.brand });
       this.registry.set(origin, lastSeg, session);
       return session;
     } catch (err) {
-      this.trace.fail(fetchSpan, err);
+      // A failed lookup is a failure, never an empty availability/price/receipt.
+      // Record the actual attempted URL, the peer ref and a classified reason.
+      this.trace.end(fetchSpan, {
+        status: "error",
+        error: String(err?.message || err),
+        errorKind: err?.kind || classifyFetchError(err),
+        rawError: err?.rawMessage || String(err?.message || err),
+        peerRef: ref,
+        manifestUrl,
+        attemptedUrls: [manifestUrl],
+        peerOrigin: hostOf(origin),
+      });
       throw err;
     }
   }

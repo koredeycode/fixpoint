@@ -21,7 +21,14 @@ import {
   agentPresentationContext,
   normalizePresentation,
   consolidateIntakePresentations,
+  canonical,
 } from "./cruse.js";
+import {
+  createFactLedger,
+  addToolResultToLedger,
+  validatePresentationGrounding,
+} from "./grounding.js";
+import { preview } from "./trace.js";
 import { applyPendingSteering, runInterruptibleModelCall } from "./turn-control.js";
 import { assertModelForRouter, effectiveModel } from "./model.js";
 
@@ -51,6 +58,19 @@ function hostOfUrl(url) {
   } catch {
     return url;
   }
+}
+
+// A model call may be interrupted by steering and by the query deadline. Combine
+// both signals so neither cause of cancellation is lost.
+function combineSignals(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  const controller = new AbortController();
+  const fromA = () => controller.abort(a.reason);
+  const fromB = () => controller.abort(b.reason);
+  a.addEventListener("abort", fromA, { once: true });
+  b.addEventListener("abort", fromB, { once: true });
+  return controller.signal;
 }
 
 // Consent protects a site boundary, not every service call. Local MCP hosts are
@@ -95,7 +115,8 @@ export function consumeRemoteBudget(composition, targetKey, now = Date.now()) {
 
 export function consumeAgentBudget(composition, now = Date.now()) {
   if (!composition) return null;
-  if (now >= composition.deadline) return "the 90-second query deadline was reached";
+  if (now >= composition.deadline)
+    return `the ${Math.round((composition.maxExecutionMs || 90_000) / 1000)}-second query deadline was reached`;
   if (composition.agentCalls >= composition.maxAgentCalls) {
     return `the per-query limit of ${composition.maxAgentCalls} agent invocations was reached`;
   }
@@ -358,6 +379,21 @@ function changed(a, b) {
   }
 }
 
+// Identical reads inside one invocation add tokens without adding facts. Cache
+// only read-only website reads; writes and remote peers must always run.
+const CACHABLE_READS = new Set([
+  "website_get_manual_index",
+  "website_get_symptom_tree",
+  "website_get_kit",
+]);
+const MUTATING_WRITES = new Set(["website_add_part_to_kit", "website_book_repair"]);
+
+function readCacheKey(ctx, call) {
+  if (call.entry?.kind !== "website" || !CACHABLE_READS.has(call.name) || !ctx.toolResultCache)
+    return null;
+  return `${ctx.toolCacheEpoch || 0}:${call.name}:${JSON.stringify(canonical(call.args || {}))}`;
+}
+
 // Execute sibling tool calls concurrently while preserving their model-visible
 // result order. Each sibling receives a private sly_data snapshot; writes are
 // merged back in call order so a faster tool cannot create nondeterministic state.
@@ -377,6 +413,32 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
       const index = next++;
       if (index >= calls.length) return;
       const call = calls[index];
+      const key = readCacheKey(ctx, call);
+      if (key && ctx.toolResultCache.has(key)) {
+        const cached = await ctx.toolResultCache.get(key);
+        ctx.trace.note("tool_deduped", {
+          parent: parentSpan,
+          origin: ctx.displayOrigin,
+          tool: call.name,
+          callId: call.id,
+          reason: "identical read already ran in this invocation",
+        });
+        addToolResultToLedger(ctx.factLedger, cached.content);
+        results[index] = {
+          ...call,
+          content: cached.content,
+          slyData: { ...initialSly, ...cached.slyData },
+        };
+        continue;
+      }
+      let resolveCache;
+      if (key)
+        ctx.toolResultCache.set(
+          key,
+          new Promise((resolve) => {
+            resolveCache = resolve;
+          }),
+        );
       const callCtx = { ...ctx, slyData: { ...initialSly } };
       const span = ctx.trace.start("tool", {
         parent: parentSpan,
@@ -392,7 +454,9 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
           : `Error: unknown tool '${call.name}'`;
         const encoded = typeof raw === "string" ? raw : JSON.stringify(raw);
         const content = encoded ?? String(raw ?? "");
-        ctx.trace.end(span, { resultPreview: content.slice(0, 240) });
+        ctx.trace.end(span, { resultPreview: preview(content, 240), result: content });
+        addToolResultToLedger(ctx.factLedger, content);
+        resolveCache?.({ content, slyData: callCtx.slyData });
         results[index] = { ...call, content, slyData: callCtx.slyData };
       } catch (error) {
         const message = String(error?.message || error);
@@ -400,8 +464,11 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
         ctx.trace.end(span, {
           status: "error",
           error: message,
-          resultPreview: content.slice(0, 240),
+          resultPreview: preview(content, 240),
+          result: content,
         });
+        addToolResultToLedger(ctx.factLedger, content);
+        resolveCache?.({ content, slyData: callCtx.slyData });
         results[index] = { ...call, content, error, slyData: callCtx.slyData };
       }
     }
@@ -413,6 +480,11 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
       if (changed(initialSly[key], value)) ctx.slyData[key] = value;
     }
   }
+  if (results.some((r) => r.entry?.kind === "website" && MUTATING_WRITES.has(r.name))) {
+    // A write changes the kit/version, so cached reads of it are now stale.
+    ctx.toolCacheEpoch = (ctx.toolCacheEpoch || 0) + 1;
+    ctx.toolResultCache?.clear();
+  }
   return results;
 }
 
@@ -422,6 +494,23 @@ export async function dispatchToolCall(ctx, entry, args, parentSpan, chain) {
   if (entry.kind === "presentation") {
     if (!ctx.presentationOutput)
       throw new Error("No presentation output is available for this invocation.");
+    if (ctx.factLedger) {
+      const grounded = validatePresentationGrounding(args.presentation, ctx.factLedger, {
+        conversationText: ctx.conversationText || "",
+      });
+      if (grounded.issues.length) {
+        trace.note("presentation_grounding", {
+          parent: parentSpan,
+          origin: ctx.displayOrigin,
+          tool: "render_cruse",
+          issues: grounded.issues,
+          droppedComponents: grounded.rejected,
+        });
+        if (!grounded.presentation)
+          throw new Error(`Presentation rejected: ${grounded.issues.join(" ")}`);
+        args = { ...args, presentation: grounded.presentation };
+      }
+    }
     const normalized = normalizePresentation(args.presentation, ctx.invocation);
     if (!normalized.presentation || normalized.issues.length) {
       throw new Error(normalized.issues.join(" ") || "Provide at least one valid CRUSE component.");
@@ -679,12 +768,21 @@ export async function runAgent(ctx, agentName, userText, parentSpan, chain) {
       ? { ...spec, instructions: `${spec.instructions || ""}\n\n${context}` }
       : spec;
   };
+  const factLedger = createFactLedger();
+  const conversationText = [
+    ...(ctx.history || []).filter((m) => m.role === "user").map((m) => String(m.content || "")),
+    userText,
+  ].join("\n");
   const local = {
     ...ctx,
     network,
     invocation: source.invocation,
     presentationOutput: { presentation: null, children: [] },
     allowedActionRefs: new Set(catalog.map((a) => a.ref)),
+    factLedger,
+    conversationText,
+    toolResultCache: new Map(),
+    toolCacheEpoch: 0,
   };
   const raw = ctx.externalRunner
     ? await ctx.externalRunner(local, agentName, userText, parentSpan, chain, {
@@ -702,6 +800,26 @@ export async function runAgent(ctx, agentName, userText, parentSpan, chain) {
     result.presentation =
       local.presentationOutput.presentation ||
       consolidateIntakePresentations(local.presentationOutput.children);
+  }
+  if (result.presentation) {
+    const grounded = validatePresentationGrounding(result.presentation, factLedger, {
+      conversationText,
+      prose: result.text,
+    });
+    if (grounded.issues.length) {
+      result.presentationIssues = [...(result.presentationIssues || []), ...grounded.issues];
+      result.presentation = grounded.presentation;
+      ctx.trace.note("presentation_grounding", {
+        parent: parentSpan,
+        ...source,
+        issues: grounded.issues,
+        droppedComponents: grounded.rejected,
+      });
+      if (!result.presentation && !result.text) {
+        result.text =
+          "I left out widget details that no tool confirmed; the grounded answer above still applies.";
+      }
+    }
   }
   ctx.actions?.validatePresentation(result, local.allowedActionRefs);
   for (const ref of proposalRefs(result)) ctx.allowedActionRefs?.add(ref);
@@ -727,6 +845,7 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
 
   const origin = ctx.displayOrigin;
   const isTopFrontMan = ctx.isTop && agentName === ctx.frontMan;
+  const compacted = new WeakSet();
   const agentSpan = trace.start("agent", {
     parent: parentSpan,
     origin,
@@ -737,6 +856,16 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
     invocation: ctx.invocation,
     isTopFrontMan,
   });
+  const deadlineAt = ctx.composition?.deadline;
+  const deadlineController = deadlineAt ? new AbortController() : null;
+  const deadlineTimer = deadlineAt
+    ? setTimeout(
+        () =>
+          deadlineController.abort(new DOMException("Execution deadline reached", "TimeoutError")),
+        Math.max(0, deadlineAt - Date.now()),
+      )
+    : null;
+  deadlineTimer?.unref?.();
 
   try {
     const { toolByName, toolSchemas } = await buildToolTable(ctx, spec, chain, agentSpan);
@@ -760,6 +889,7 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
 
     let finalText = "";
     for (let step = 0; step < maxSteps; step++) {
+      if (deadlineAt && Date.now() >= deadlineAt) throw new Error("Execution deadline reached");
       if (isTopFrontMan) {
         applyPendingSteering(ctx.turnControl, (text) =>
           messages.push({ role: "user", content: text }),
@@ -776,7 +906,7 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
             origin,
             parentSpan: agentSpan,
             onContentDelta,
-            signal,
+            signal: combineSignals(signal, deadlineController?.signal),
           }),
       );
       if (attempt.interrupted) {
@@ -803,6 +933,14 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
         return { id: tc.id, name: tc.function.name, args, entry: toolByName.get(tc.function.name) };
       });
       const toolResults = await executeToolCalls(ctx, calls, agentSpan, chain);
+      // Older tool results are compacted in place. The fact ledger keeps the full
+      // values, so grounding survives while the next model call sends fewer tokens.
+      const priorTools = messages.filter((m) => m.role === "tool");
+      for (const old of priorTools.slice(0, -2)) {
+        if (compacted.has(old)) continue;
+        old.content = `${preview(old.content, 400)}\n[earlier tool result compacted; facts retained]`;
+        compacted.add(old);
+      }
       for (const result of toolResults) {
         messages.push({
           role: "tool",
@@ -814,7 +952,7 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
           parent: agentSpan,
           origin,
           tool: result.name,
-          preview: result.content.slice(0, 200),
+          preview: preview(result.content, 200),
           type: ChatMessageType.AGENT_TOOL_RESULT,
         });
       }
@@ -825,6 +963,8 @@ export async function runAgentManual(ctx, agentName, userText, parentSpan, chain
   } catch (err) {
     trace.fail(agentSpan, err);
     throw err;
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
   }
 }
 

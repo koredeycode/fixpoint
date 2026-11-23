@@ -23,25 +23,19 @@ action, a self-contained copy of the agent runtime, and an action bridge.
 | `runtime/`                   | Full copy of `public/runtime/` from the Fixpoint site, so this peer is self-contained.                         |
 | `vercel.json`                | Copied from the primary site; provides permissive CORS headers for peer calls.                                 |
 
-## Deploy
+## Deployment (already live)
 
-1. Create a Vercel project named `localpros-fixpoint` whose Root Directory is this folder
-   (`peers/localpros` in the repository).
-2. Deploy it as a **static** site. The checked-in `vercel.json` is copied from the primary site
-   and still names Vite's `npm ci` / `npm run build` / `dist` pipeline; because this folder has
-   no `package.json` or build step, override those settings in the Vercel project (empty Build
-   Command and Output Directory set to the project root), or replace `vercel.json` with a static
-   config that keeps the same CORS headers.
-3. Keep the CORS headers (`Access-Control-Allow-Origin: *`, `GET, OPTIONS`) so Fixpoint can load
-   the manifest, network and bridge cross-origin. Do not add `X-Frame-Options: DENY` or a
-   `frame-ancestors` CSP: the bridge page must be frameable.
-4. Confirm these URLs respond:
-   - `https://localpros-fixpoint.vercel.app/localpros/agent-manifest.json`
-   - `https://localpros-fixpoint.vercel.app/localpros/localpros.network.json`
-   - `https://localpros-fixpoint.vercel.app/localpros/bridge/action-bridge.html`
-5. In the calling Fixpoint site, import this peer by the peer URL above (add it to
-   `allowed_peers` / the link imports and enable the peer). Fixpoint then loads this network in
-   the visitor's browser and receives only `website_available_slots`.
+Vercel project `localpros-fixpoint`, root directory `peers/localpros`, deployed from this branch with `vercel --prod --yes`. No build command; `vercel.json` only supplies the global CORS headers.
+
+**Peer URL:** `https://localpros-fixpoint.vercel.app/localpros`
+
+The bridge page must stay frameable — do not add `X-Frame-Options: DENY` or a restrictive `frame-ancestors` CSP. To redeploy after editing this folder, run `cd peers/localpros && vercel --prod --yes`. Verify with:
+
+```
+node tooling/scripts/check_partner.mjs https://localpros-fixpoint.vercel.app/localpros --origin https://askfixpoint.vercel.app
+```
+
+Slot ids, labels and prices in `catalogue.js` are mirrored in `public/data/manuals.js`, so `website_book_repair` accepts every slot this peer returns.
 
 ## Editing the catalogue
 

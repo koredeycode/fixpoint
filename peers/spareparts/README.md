@@ -2,23 +2,19 @@
 
 A minimal, **static** agent site that Fixpoint can call as a genuine peer network by URL. There is no React app and no backend: just a manifest, a network definition, two read-only action modules, and a copy of Fixpoint's runtime that serves the action bridge. When Fixpoint loads this peer, it runs the `parts_desk` front agent in the visitor's browser and the agent calls `website_check_stock` against the local catalogue.
 
-## Deploy to Vercel
+## Deployment (already live)
 
-1. Create a new Vercel project and point the **root directory** at this folder:
-   `peers/spareparts`.
-2. Use the framework preset **Other** (the included `vercel.json` sets the Vite preset, which is harmless here — there is no build step; the global CORS headers in it are the essential part for cross-origin framing/fetching).
-3. Suggested **project name**: `spareparts-fixpoint`.
-4. Deploy. No environment variables or build command are required.
+Vercel project `spareparts-fixpoint`, root directory `peers/spareparts`, deployed from this branch with `vercel --prod --yes`. No build command; `vercel.json` only supplies the global CORS headers.
 
-The peer URL is then:
+**Peer URL:** `https://spareparts-fixpoint.vercel.app/spareparts`
+
+The **network name is the final path segment** (`spareparts`) and matches `agent-manifest.json` and `bridge/agent-manifest.json`. To redeploy after editing this folder, run `cd peers/spareparts && vercel --prod --yes`. Verify with:
 
 ```
-https://spareparts-fixpoint.vercel.app/spareparts
+node tooling/scripts/check_partner.mjs https://spareparts-fixpoint.vercel.app/spareparts --origin https://askfixpoint.vercel.app
 ```
 
-The **network name is the final path segment** (`spareparts`). It must match `"name": "spareparts"` in `agent-manifest.json` and the network name in `bridge/agent-manifest.json`, because that is the name Fixpoint uses to address the peer.
-
-In the Fixpoint site's `allowed_peers` / link imports, register the peer with the URL above (or its origin) so it can discover and call this network.
+Prices in `catalogue.js` match `public/data/manuals.js`, which is authoritative for Fixpoint's receipt totals.
 
 ## Layout
 
