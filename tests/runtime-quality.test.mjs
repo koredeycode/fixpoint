@@ -245,3 +245,72 @@ test("boundHistory trims old turns but keeps the latest pair", () => {
   assert.ok(bounded.length < 12);
   assert.equal(bounded.at(-1).content, "x".repeat(900));
 });
+
+// --- Follow-up: avoid the empty-kit booking error ----------------------------
+
+test("book_repair is skipped when this turn's kit is empty", async () => {
+  const trace = new TraceBus();
+  const parent = trace.start("run");
+  const ctx = {
+    trace,
+    displayOrigin: "site.test",
+    network: { name: "test" },
+    composition: {},
+    slyData: {},
+    toolResultCache: new Map(),
+    toolCacheEpoch: 0,
+    factLedger: createFactLedger(),
+    kitState: { ok: true, items: [], version: 0, total: 0 },
+  };
+  const call = {
+    id: "bk",
+    name: "website_book_repair",
+    args: { slotId: "slot_early", expectedVersion: 0 },
+    entry: { kind: "website", ref: "https://site.test/test#book_repair" },
+  };
+  const results = await executeToolCalls(ctx, [call], parent, []);
+  assert.match(results[0].content, /Skipped website_book_repair/);
+  assert.ok(trace.events.some((e) => e.kind === "tool_skipped"));
+  assert.equal(trace.events.filter((e) => e.kind === "tool" && e.phase === "start").length, 0);
+});
+
+test("read cache is shared across agents within one turn", async () => {
+  let executions = 0;
+  const registry = new ActionRegistry();
+  const ref = registry.register(
+    { base: "https://site.test", network: "test" },
+    {
+      name: "get_manual_index",
+      description: "read index",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      execute: () => {
+        executions += 1;
+        return JSON.stringify({ status: "succeeded", result: { ok: true } });
+      },
+    },
+  );
+  const trace = new TraceBus();
+  const parent = trace.start("run");
+  const composition = {};
+  const makeCtx = () => ({
+    trace,
+    displayOrigin: "site.test",
+    actions: registry,
+    baseOrigin: "https://site.test",
+    manifest: { actions: { agentTools: ["get_manual_index"] } },
+    network: { name: "test" },
+    isTop: true,
+    composition,
+    slyData: {},
+    toolResultCache: (composition.toolResultCache ||= new Map()),
+    toolCacheEpoch: 0,
+    factLedger: createFactLedger(),
+    conversationText: "",
+  });
+  const entry = { kind: "website", ref };
+  const call = (id) => ({ id, name: "website_get_manual_index", args: {}, entry });
+  await executeToolCalls(makeCtx(), [call("front")], parent, []);
+  await executeToolCalls(makeCtx(), [call("child")], parent, []);
+  assert.equal(executions, 1);
+  assert.ok(trace.events.some((e) => e.kind === "tool_deduped"));
+});

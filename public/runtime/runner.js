@@ -312,7 +312,18 @@ const MUTATING_WRITES = new Set(["website_add_part_to_kit", "website_book_repair
 
 function readCacheKey(ctx, call) {
   if (call.entry?.kind !== "website" || !CACHABLE_READS.has(call.name) || !ctx.toolResultCache) return null;
-  return `${ctx.toolCacheEpoch || 0}:${call.name}:${JSON.stringify(canonical(call.args || {}))}`;
+  // The cache lives on `composition`, so it is shared by the front man and its
+  // child agents for one turn. Network name keeps peer reads from colliding.
+  return `${ctx.network?.name || ""}:${ctx.toolCacheEpoch || 0}:${call.name}:${JSON.stringify(canonical(call.args || {}))}`;
+}
+
+// The store already refuses a booking with an empty kit; asking the model to
+// make that call just produces a confusing error event. Skip it at the tool
+// boundary when this turn's fresh get_kit result shows no staged part.
+function emptyKitGuard(ctx, call) {
+  if (call.name !== "website_book_repair" || !ctx.kitState) return null;
+  if (ctx.kitState.items?.length) return null;
+  return "Skipped website_book_repair: kit is empty in this turn's website_get_kit result; no part is staged, so nothing was booked.";
 }
 
 // Execute sibling tool calls concurrently while preserving their model-visible
@@ -334,6 +345,16 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
       const index = next++;
       if (index >= calls.length) return;
       const call = calls[index];
+      const skipped = emptyKitGuard(ctx, call);
+      if (skipped) {
+        ctx.trace.note("tool_skipped", {
+          parent: parentSpan, origin: ctx.displayOrigin, tool: call.name, callId: call.id,
+          reason: "empty kit in this turn's get_kit result",
+        });
+        addToolResultToLedger(ctx.factLedger, skipped);
+        results[index] = { ...call, content: skipped, slyData: { ...initialSly } };
+        continue;
+      }
       const key = readCacheKey(ctx, call);
       if (key && ctx.toolResultCache.has(key)) {
         const cached = await ctx.toolResultCache.get(key);
@@ -363,6 +384,12 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
         const encoded = typeof raw === "string" ? raw : JSON.stringify(raw);
         const content = encoded ?? String(raw ?? "");
         ctx.trace.end(span, { resultPreview: preview(content, 240), result: content });
+        if (call.name === "website_get_kit") {
+          try {
+            const parsed = typeof content === "string" ? JSON.parse(content) : content;
+            if (parsed?.status === "succeeded" && parsed.result?.ok) ctx.kitState = parsed.result;
+          } catch { /* keep the previous kit state if the payload is not JSON */ }
+        }
         addToolResultToLedger(ctx.factLedger, content);
         resolveCache?.({ content, slyData: callCtx.slyData });
         results[index] = { ...call, content, slyData: callCtx.slyData };
@@ -387,6 +414,7 @@ export async function executeToolCalls(ctx, calls, parentSpan, chain, { maxConcu
     // A write changes the kit/version, so cached reads of it are now stale.
     ctx.toolCacheEpoch = (ctx.toolCacheEpoch || 0) + 1;
     ctx.toolResultCache?.clear();
+    if (ctx.composition) ctx.composition.toolCacheEpoch = ctx.toolCacheEpoch;
   }
   return results;
 }
@@ -586,7 +614,9 @@ export async function runAgent(ctx, agentName, userText, parentSpan, chain) {
   const conversationText = [...(ctx.history || []).filter((m) => m.role === "user").map((m) => String(m.content || "")), userText].join("\n");
   const local = { ...ctx, network, invocation: source.invocation,
     presentationOutput: { presentation: null, children: [] }, allowedActionRefs: new Set(catalog.map(a => a.ref)),
-    factLedger, conversationText, toolResultCache: new Map(), toolCacheEpoch: 0 };
+    factLedger, conversationText,
+    toolResultCache: ctx.composition ? (ctx.composition.toolResultCache ||= new Map()) : new Map(),
+    toolCacheEpoch: ctx.composition ? (ctx.composition.toolCacheEpoch || 0) : 0 };
   const raw = ctx.externalRunner
     ? await ctx.externalRunner(local, agentName, userText, parentSpan, chain, {
       buildToolTable, dispatchToolCall, executeToolCalls, schemaFor, argsToText,
