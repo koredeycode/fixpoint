@@ -16,6 +16,8 @@ node tooling/scripts/check_partner.mjs https://spareparts-fixpoint.vercel.app/sp
 
 Prices in `catalogue.js` match `public/data/manuals.js`, which is authoritative for Fixpoint's receipt totals.
 
+These Vercel projects were deployed from this folder with the CLI and are **not** connected to Git auto-deploy. After editing this folder, redeploy explicitly with `vercel --prod --yes --name spareparts-fixpoint` — the `--name` matters; without it Vercel deploys the repo root instead.
+
 ## Layout
 
 | File                         | Purpose                                                                                          |

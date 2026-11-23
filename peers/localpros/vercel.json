@@ -1,4 +1,5 @@
 {
+  "rewrites": [{ "source": "/localpros", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",

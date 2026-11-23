@@ -37,6 +37,8 @@ node tooling/scripts/check_partner.mjs https://localpros-fixpoint.vercel.app/loc
 
 Slot ids, labels and prices in `catalogue.js` are mirrored in `public/data/manuals.js`, so `website_book_repair` accepts every slot this peer returns.
 
+These Vercel projects were deployed from this folder with the CLI and are **not** connected to Git auto-deploy. After editing this folder, redeploy explicitly with `vercel --prod --yes --name localpros-fixpoint` — the `--name` matters; without it Vercel deploys the repo root instead.
+
 ## Editing the catalogue
 
 Change `catalogue.js` to update slot ids, labels, prices or dates. Keep the shape of each entry

@@ -1,4 +1,5 @@
 {
+  "rewrites": [{ "source": "/spareparts", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",
