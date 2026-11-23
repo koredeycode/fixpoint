@@ -13,7 +13,6 @@
         "Add the drive belt to my kit",
         "Check stock on BELT-42 and book the earliest slot",
         "Book a repair pro for tomorrow morning",
-        "What is the Open Agentic Web Challenge?",
         "Do you repair televisions?"
       ]
     }
@@ -24,14 +23,13 @@
     "byok_router": "https://api.otari.ai/api/v1"
   },
   "allowed_peers": [
-    "https://parts.example",
-    "https://pros.example",
-    "https://worldwideagenticweb.org"
+    "https://spareparts-fixpoint.vercel.app",
+    "https://localpros-fixpoint.vercel.app"
   ],
   "peer_policy": {
     "mode": "closed",
     "deny_origins": [],
-    "note": "Named parts, repair and challenge-guide peers only, after visitor consent."
+    "note": "First-party subsidiary networks only, after visitor consent."
   },
   "agent_mcp": {
     "protocol": "nsdeploy-agent-mcp/v1",

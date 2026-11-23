@@ -1,0 +1,12 @@
+{
+  "networks": [
+    {
+      "name": "spareparts"
+    }
+  ],
+  "actions": {
+    "version": 1,
+    "module": "./bridge-actions.js",
+    "agentTools": ["check_stock"]
+  }
+}

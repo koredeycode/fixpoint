@@ -471,7 +471,9 @@ export class AssistantMount {
     }
     const decision = await answer;
     window.__FIXPOINT_OBS__?.note("peer_consent", {
-      destination: info?.origin || info?.host,
+      peerOrigin: info?.peerOrigin || info?.origin || info?.host,
+      peerLabel: info?.peerLabel,
+      requestPreview: String(info?.requestText || "").slice(0, 140),
       decision,
     });
     AssistantMount.keepFocusInChat();

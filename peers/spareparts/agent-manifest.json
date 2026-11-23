@@ -1,0 +1,63 @@
+{
+  "brand": "SpareParts Co",
+  "networks": [
+    {
+      "name": "spareparts",
+      "front_man": "parts_desk",
+      "hocon": "./spareparts.network.json",
+      "description": "Look up real spare-parts stock, prices and ETAs by part id.",
+      "tags": ["agentified-website", "spare-parts", "stock"],
+      "sample_queries": ["Do you have belt_42 in stock?", "What is the price and ETA for pump_17?"]
+    }
+  ],
+  "llm_router": {
+    "base_url": "https://api.otari.ai/api/v1",
+    "mock": false,
+    "byok_router": "https://api.otari.ai/api/v1"
+  },
+  "allowed_peers": [],
+  "peer_policy": {
+    "mode": "closed",
+    "deny_origins": [],
+    "note": "No peer networks in this build; all agents are local to this site."
+  },
+  "agent_mcp": {
+    "protocol": "nsdeploy-agent-mcp/v1",
+    "network": "spareparts",
+    "front_man": "parts_desk",
+    "available": false,
+    "reason": "Static bundle; a public MCP facade requires an application host."
+  },
+  "theme": {
+    "primary": "#0f766e"
+  },
+  "linking": {
+    "protocol": "nsdeploy-link/v1",
+    "exports": [
+      {
+        "network": "spareparts",
+        "front_man": "parts_desk",
+        "aliases": ["spareparts", "parts_desk"],
+        "url": "spareparts"
+      }
+    ],
+    "imports": [],
+    "link_updates": {
+      "mode": "browser-local"
+    }
+  },
+  "deployment": {
+    "mode": "static",
+    "self_contained_runtime": true,
+    "browser_mock": false,
+    "direct_byok": true,
+    "direct_mcp_requires_cors": true,
+    "public_mcp_facade": false
+  },
+  "actions": {
+    "version": 1,
+    "module": "./site-actions.js",
+    "bridge": "./bridge/action-bridge.html",
+    "agentTools": ["check_stock"]
+  }
+}

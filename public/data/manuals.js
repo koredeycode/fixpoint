@@ -269,8 +269,12 @@ export const MANUALS_DATA = {
     { id: "fan_11", name: "FAN-11 Condenser fan", price: 24.0, fits: ["fridge_fr400"] },
     { id: "thermostat_22", name: "THERM-22 Thermostat", price: 32.0, fits: ["fridge_fr400"] },
   ],
+  // Kept in sync with peers/localpros/catalogue.js so peer slot ids are
+  // always accepted by website_book_repair.
   slots: [
-    { id: "slot_am", label: "Tomorrow, 09:00–12:00", price: 65 },
-    { id: "slot_pm", label: "Tomorrow, 13:00–16:00", price: 55 },
+    { id: "slot_am", label: "Morning visit 09:00-12:00", price: 65 },
+    { id: "slot_pm", label: "Afternoon visit 13:00-16:00", price: 55 },
+    { id: "slot_early", label: "Early visit 08:00-11:00", price: 70 },
+    { id: "slot_evening", label: "Evening visit 17:00-20:00", price: 75 },
   ],
 };

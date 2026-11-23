@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "description": "Local Repair Pros peer: report the real available repair slots and prices as short plain text.",
+    "sample_queries": [
+      "What repair slots do you have?",
+      "Do you have a morning slot?",
+      "How much is an afternoon visit?"
+    ]
+  },
+  "llm_config": {
+    "model_name": "alibaba/qwen3.8-flash"
+  },
+  "max_steps": 5,
+  "tools": [
+    {
+      "name": "pro_desk",
+      "function": {
+        "description": "Front desk for Local Repair Pros: report the real available repair slots with their exact labels and prices.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "string",
+              "description": "The visitor's request for repair slots, with a date if they named one."
+            }
+          },
+          "required": ["request"]
+        }
+      },
+      "instructions": "You are the Local Repair Pros peer. Call website_available_slots and return its exact result as short plain text. Never invent slots, times or prices.",
+      "allow": {
+        "to_downstream": {
+          "sly_data": []
+        },
+        "to_upstream": {
+          "sly_data": []
+        }
+      },
+      "tools": []
+    }
+  ]
+}
