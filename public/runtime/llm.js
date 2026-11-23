@@ -8,6 +8,34 @@ function hostOf(url) {
   try { return new URL(url).host; } catch { return url || "?"; }
 }
 
+// Providers stream one fragment at a time — the reference trace had 1,016
+// model_call updates, some a single character. Buffer to word/sentence
+// boundaries (with a size and time cap) before forwarding text to consumers.
+export function createDeltaBuffer(emit, { size = 48, timeoutMs = 120 } = {}) {
+  let pending = "";
+  let timer = null;
+  const flush = () => {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (!pending) return;
+    const text = pending;
+    pending = "";
+    emit(text);
+  };
+  return {
+    push(fragment) {
+      if (!fragment) return;
+      pending += fragment;
+      if (/[\n.!?;:]\s?$/.test(pending) || pending.length >= size) flush();
+      else if (!timer) timer = setTimeout(flush, timeoutMs);
+    },
+    flush,
+    dispose() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      pending = "";
+    },
+  };
+}
+
 export function isMockResponse(configuredMock, routeKind, model) {
   return !!configuredMock || routeKind === "mock" || /neuro-san-mock/.test(model || "");
 }
@@ -82,6 +110,12 @@ export class LlmClient {
       keySource: this.apiKey ? "local BYOK (not shown)" : "none",
       toolNames: (tools || []).map((t) => t.function.name),
     });
+    let rawChunks = 0;
+    const deltaBuffer = createDeltaBuffer((text) => {
+      if (signal?.aborted) return;
+      onContentDelta?.(text);
+      this.trace?.update(span, { streamChunk: text });
+    });
 
     const body = {
       model,
@@ -98,9 +132,10 @@ export class LlmClient {
         signal?.throwIfAborted?.();
         const result = browserMockCompletion(messages, tools);
         if (result.content) {
-          onContentDelta?.(result.content);
-          this.trace?.update(span, { streamChunk: result.content });
+          rawChunks += 1;
+          deltaBuffer.push(result.content);
         }
+        deltaBuffer.flush();
         this.trace?.end(span, {
           finishReason: result.finishReason,
           contentChars: result.content.length,
@@ -110,6 +145,8 @@ export class LlmClient {
           verifiedReal: false,
           respModel: result.model,
           routeKind: "browser-mock",
+          streamChunks: rawChunks,
+          streamText: result.content,
         });
         return result;
       }
@@ -132,7 +169,11 @@ export class LlmClient {
       }
 
       const routeKind = resp.headers.get("X-Nsdeploy-LLM-Route") || "";
-      const result = await this._readSse(resp, onContentDelta, span, signal);
+      const result = await this._readSse(resp, (fragment) => {
+        rawChunks += 1;
+        deltaBuffer.push(fragment);
+      }, signal);
+      deltaBuffer.flush();
       const respMock = isMockResponse(this.mock, routeKind, result.model);
       this.trace?.end(span, {
         finishReason: result.finishReason,
@@ -143,9 +184,12 @@ export class LlmClient {
         verifiedReal: !respMock && !!result.model,
         respModel: result.model,
         routeKind,
+        streamChunks: rawChunks,
+        streamText: result.content,
       });
       return result;
     } catch (err) {
+      deltaBuffer.flush();
       const friendlyError = ProviderError.friendly(err, this.baseUrl);
       if (err?.name === "AbortError" && signal?.aborted) {
         this.trace?.end(span, { status: "steered", interrupted: true });
@@ -153,10 +197,12 @@ export class LlmClient {
         this.trace?.fail(span, friendlyError);
       }
       throw friendlyError;
+    } finally {
+      deltaBuffer.dispose();
     }
   }
 
-  async _readSse(resp, onContentDelta, span, signal) {
+  async _readSse(resp, onContentDelta, signal) {
     const reader = resp.body.getReader();
     const cancel = () => reader.cancel(signal?.reason).catch(() => {});
     signal?.addEventListener("abort", cancel, { once: true });
@@ -180,10 +226,7 @@ export class LlmClient {
       const delta = choice.delta || {};
       if (delta.content) {
         content += delta.content;
-        if (!signal?.aborted) {
-          onContentDelta?.(delta.content);
-          this.trace?.update(span, { streamChunk: delta.content });
-        }
+        if (!signal?.aborted) onContentDelta?.(delta.content);
       }
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {

@@ -1801,7 +1801,7 @@ function rowLabel(ev) {
 
 function detailJson(ev) {
   const keep = {};
-  for (const k of ["fetchedUrls", "requestPayload", "args", "result", "presentation", "issues", "invocation", "headers", "toolNames", "usage", "responsePreview", "preview", "errors", "warnings", "peers", "error", "httpStatus", "url", "method", "endpoint", "routerHost", "mock"]) {
+  for (const k of ["fetchedUrls", "requestPayload", "args", "result", "resultPreview", "resultBytes", "presentation", "issues", "invocation", "headers", "toolNames", "usage", "responsePreview", "preview", "errors", "warnings", "peers", "error", "httpStatus", "url", "method", "endpoint", "routerHost", "mock", "streamText", "streamChunks", "chunkCount"]) {
     if (ev[k] !== undefined) keep[k] = ev[k];
   }
   return Object.keys(keep).length ? JSON.stringify(keep, null, 2) : "";

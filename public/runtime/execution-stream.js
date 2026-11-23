@@ -1,3 +1,5 @@
+import { preview } from "./trace.js";
+
 // execution-stream.js — public, per-turn async execution stream.
 //
 // TraceBus remains the complete developer/audit record. This adapter projects one
@@ -55,10 +57,7 @@ class AsyncEventQueue {
   [Symbol.asyncIterator]() { return this; }
 }
 
-function preview(value, limit = 240) {
-  const text = typeof value === "string" ? value : JSON.stringify(value ?? "");
-  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
-}
+
 
 // Start a turn immediately and return an AsyncIterable of its public events.
 // `runTurn` is injected to keep this adapter independent of Engine internals.
@@ -67,6 +66,8 @@ export function createTurnEventStream(trace, runTurn, streamToken) {
   const spans = new Map();
   const included = new Set();
   let runId = null;
+  let runStartedAt = null;
+  let firstDeltaAt = null;
 
   const nearest = (id, kind) => {
     let current = id;
@@ -93,6 +94,7 @@ export function createTurnEventStream(trace, runTurn, streamToken) {
     const ev = message.detail;
     if (ev.phase === "start" && ev.kind === "run" && runId === null && (!streamToken || ev.streamToken === streamToken)) {
       runId = ev.id;
+      runStartedAt = ev.wall;
       included.add(ev.id);
       spans.set(ev.id, ev);
       queue.push(base("turn.started", ev, { input: ev.input || "" }));
@@ -124,12 +126,14 @@ export function createTurnEventStream(trace, runTurn, streamToken) {
         visibility: "user",
       }));
     } else if (ev.phase === "update" && ev.kind === "model_call" && ev.streamChunk) {
+      const visibility = agent?.isTopFrontMan ? "user" : "developer";
+      if (visibility === "user" && firstDeltaAt === null) firstDeltaAt = ev.wall;
       queue.push(base("agent.output.delta", ev, {
         source,
         delta: ev.streamChunk,
         // Root answer deltas are user-facing; downstream working text stays
         // available to developer consumers without leaking into the main UI.
-        visibility: agent?.isTopFrontMan ? "user" : "developer",
+        visibility,
       }));
     } else if (ev.phase === "start" && ev.kind === "tool") {
       queue.push(base("tool.started", ev, {
@@ -149,7 +153,8 @@ export function createTurnEventStream(trace, runTurn, streamToken) {
       queue.push(base(ev.status === "error" ? "tool.failed" : "tool.completed", ev, {
         source,
         tool: { name: ev.tool, callId: ev.callId, kind: ev.toolKind },
-        resultPreview: preview(ev.resultPreview || ev.error || ""),
+        resultPreview: preview(ev.result || ev.resultPreview || ev.error || ""),
+        resultBytes: typeof ev.result === "string" ? ev.result.length : undefined,
         error: ev.status === "error" ? ev.error : undefined,
         visibility: "user",
       }));
@@ -182,6 +187,7 @@ export function createTurnEventStream(trace, runTurn, streamToken) {
         id: `${result.turnId || runId}:completed`,
         parentId: result.turnId || runId,
         result,
+        firstDeltaMs: firstDeltaAt !== null && runStartedAt !== null ? firstDeltaAt - runStartedAt : null,
         visibility: "user",
       });
       queue.close();

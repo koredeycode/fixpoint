@@ -506,6 +506,10 @@ class NetworkBuilder {
     if (!rules) {
       return;
     }
+    if (typeof strings.evidence_rules === "string" && typeof rules.evidence_rules === "string"
+      && strings.evidence_rules !== rules.evidence_rules) {
+      this.warnings.push("evidence_rules differs from templates/network.hocon. Copy it unchanged so the anti-fabrication rules stay in step across sites.");
+    }
     if (typeof strings.partner_rules === "string") {
       // Each site names its own read action in place of website_<read_action>.
       // Action names may hold "-", as checkAgentTools allows.
