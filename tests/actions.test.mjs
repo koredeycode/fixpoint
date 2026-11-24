@@ -59,3 +59,47 @@ test("bookRepair returns a receipt with the total", () => {
   assert.match(result.receipt.confirmation, /^FP-/);
   assert.equal(result.receipt.total, 83);
 });
+
+test("manual index exposes the dataset version and the new grounded symptoms", () => {
+  const result = App.page.getManualIndex();
+  assert.equal(result.datasetVersion, "0.2.0");
+  const washer = result.appliances.find((a) => a.id === "washer_wx200");
+  assert.ok(washer.symptoms.some((s) => s.id === "wont_start"));
+  const dishwasher = result.appliances.find((a) => a.id === "dishwasher_dx100");
+  assert.ok(dishwasher.symptoms.some((s) => s.id === "not_cleaning"));
+  const fridge = result.appliances.find((a) => a.id === "fridge_fr400");
+  assert.ok(fridge.symptoms.some((s) => s.id === "not_freezing"));
+});
+
+test("new symptom trees carry sections, safety notes and technician-only flags", () => {
+  const tree = App.page.getSymptomTree("washer_wx200", "wont_start");
+  assert.equal(tree.ok, true);
+  assert.match(tree.section, /§2/);
+  assert.ok(tree.summary);
+  assert.ok(tree.steps.every((step) => step.section && step.safety));
+  assert.equal(tree.resolution.interlock.proRequired, true);
+  assert.equal(tree.resolution.supply.proRequired, false);
+
+  const cleaning = App.page.getSymptomTree("dishwasher_dx100", "not_cleaning");
+  assert.equal(cleaning.resolution.filter.partId, "filter_09");
+  assert.equal(cleaning.resolution.spray_arm.proRequired, false);
+});
+
+test("dataset 0.2.0 keeps every 0.1.0 part id, price and slot id", () => {
+  assert.deepEqual(App.page.partIds(), [
+    "belt_42",
+    "pump_17",
+    "filter_09",
+    "fan_11",
+    "thermostat_22",
+  ]);
+  const parts = App.page.getState().parts;
+  assert.deepEqual(
+    parts.map((p) => p.price),
+    [18, 47.5, 12, 24, 32],
+  );
+  assert.deepEqual(
+    App.page.getState().slots.map((s) => s.id),
+    ["slot_am", "slot_pm", "slot_early", "slot_evening"],
+  );
+});

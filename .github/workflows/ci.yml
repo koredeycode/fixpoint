@@ -16,6 +16,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:network
+      # Fetches the latest agentify-website skill from upstream on every run,
+      # so new spec checks start failing CI without a vendored copy going stale.
+      - run: npm run check:spec
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check

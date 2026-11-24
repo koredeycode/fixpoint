@@ -10,6 +10,7 @@
     "preview": "node tooling/scripts/serve_site.mjs dist --port 8080",
     "build:network": "node tooling/scripts/build_network.mjs fixpoint.hocon --manifest ./public/agent-manifest.json --runtime ./public/runtime --out ./public/fixpoint.network.json",
     "check:network": "node tooling/scripts/build_network.mjs fixpoint.hocon --manifest ./public/agent-manifest.json --runtime ./public/runtime --out ./public/fixpoint.network.json --check",
+    "check:spec": "node tooling/scripts/check_spec.mjs",
     "check:partner": "node tooling/scripts/check_partner.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
