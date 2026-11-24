@@ -387,6 +387,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
         <p>Choose a provider below and create a key. Its recommended settings will be filled in for you.</p>
         <div class="ns-key-providers">${providerLinksHtml}</div>
         <div class="ns-hint">Free tiers have usage limits and may vary by region. Other providers may require billing.</div>
+        <div class="ns-hint">Fixpoint coordinates several agents. Very small models (under about 7B) may struggle with the multi-step diagnosis; an instruction-tuned 8B+ model gives the most reliable results.</div>
       </div>
       <label><span>API key <span aria-hidden="true">*</span></span><input id="ns-key" type="password" autocomplete="off" placeholder="Paste your API key" required aria-required="true"></label>
       <div class="ns-openrouter-key" hidden>

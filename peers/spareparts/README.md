@@ -11,8 +11,11 @@ Vercel project `spareparts-fixpoint`, root directory `peers/spareparts`, deploye
 The **network name is the final path segment** (`spareparts`) and matches `agent-manifest.json` and `bridge/agent-manifest.json`. To redeploy after editing this folder, run `cd peers/spareparts && vercel --prod --yes`. Verify with:
 
 ```
+npm run check:peers
 node tooling/scripts/check_partner.mjs https://spareparts-fixpoint.vercel.app/spareparts --origin https://askfixpoint.vercel.app
 ```
+
+`check:peers` fails if the origin's root manifest stops publishing the `spareparts` network — that is the failure mode that broke the demo on 24 Nov 2026.
 
 Prices in `catalogue.js` match `public/data/manuals.js`, which is authoritative for Fixpoint's receipt totals.
 
