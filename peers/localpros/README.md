@@ -32,8 +32,11 @@ Vercel project `localpros-fixpoint`, root directory `peers/localpros`, deployed 
 The bridge page must stay frameable — do not add `X-Frame-Options: DENY` or a restrictive `frame-ancestors` CSP. To redeploy after editing this folder, run `cd peers/localpros && vercel --prod --yes`. Verify with:
 
 ```
+npm run check:peers
 node tooling/scripts/check_partner.mjs https://localpros-fixpoint.vercel.app/localpros --origin https://askfixpoint.vercel.app
 ```
+
+`check:peers` fails if the origin's root manifest stops publishing the `localpros` network — that is the failure mode that broke the demo on 24 Nov 2026.
 
 Slot ids, labels and prices in `catalogue.js` are mirrored in `public/data/manuals.js`, so `website_book_repair` accepts every slot this peer returns.
 
