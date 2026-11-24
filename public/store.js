@@ -51,6 +51,7 @@ export const App = {
       return {
         ok: true,
         sourceUrl: sourceLink("manual_library"),
+        datasetVersion: MANUALS_DATA.datasetVersion,
         slots: snapshot(state.slots),
         appliances: state.appliances.map((a) => ({
           id: a.id,
@@ -100,6 +101,8 @@ export const App = {
         manual: appliance.manual,
         sourceUrl: sourceLink(appliance.id, symptom.id),
         symptom: symptom.name,
+        section: symptom.section,
+        summary: symptom.summary,
         steps: snapshot(symptom.steps),
         resolution: snapshot(symptom.resolution),
         source: `public/data/manuals.js#${applianceId}.${symptomId}`,

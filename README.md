@@ -54,6 +54,11 @@ them. `public/_headers` provides the equivalent rules for Cloudflare Pages / Net
 Disable Vercel Deployment Protection on the production domain.
 See `tooling/references/bundle_and_hosting.md`.
 
+## Challenge submission
+
+- [Post-fix trace verification](docs/trace-verification.md)
+- Run `npm run check:spec` before submitting: it fetches the latest upstream spec validator on every invocation and is part of CI.
+
 ## Spec & credits
 
 - [Open Agentic Web MVP spec](https://github.com/cognizant-ai-labs/agentic-web/blob/main/docs/worldwide_agentic_web_mvp_spec.md)
